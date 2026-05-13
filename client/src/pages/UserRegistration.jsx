@@ -22,6 +22,7 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const HERO_BG_URL =
   "https://res.cloudinary.com/dcqo5qt7b/image/upload/v1767294465/ddka_gallery/yc2i3aphkskozb3sktyl.jpg";
 const INDOCREONIX_LOGO_URL = "https://indocreonix.com/logo.png";
+const FIXED_EVENT_NAME = "Jharkhand Senior State Championship";
 
 export default function UserRegistration() {
   const navigate = useNavigate();
@@ -47,9 +48,10 @@ export default function UserRegistration() {
 
     const seniorEvent = eventList.find(
       (ev) =>
-        /senior/i.test(ev.name) ||
-        /state/i.test(ev.name) ||
-        /senior state/i.test(ev.name),
+        ev.name?.trim().toLowerCase() === FIXED_EVENT_NAME.toLowerCase() ||
+        (/jharkhand/i.test(ev.name) &&
+          /senior/i.test(ev.name) &&
+          /state/i.test(ev.name)),
     );
 
     return seniorEvent?.id || eventList[0]?.id || "";
@@ -92,7 +94,7 @@ export default function UserRegistration() {
         setForm((prev) => ({
           ...prev,
           ...parsed,
-          eventId: parsed.eventId || prev.eventId || getActiveEventId(),
+          eventId: getActiveEventId() || parsed.eventId || prev.eventId,
         }));
         if (parsed.photoUrl) setPhotoPreview(parsed.photoUrl);
         if (parsed.aadharFrontUrl) setAadharFrontPreview(parsed.aadharFrontUrl);
@@ -169,7 +171,7 @@ export default function UserRegistration() {
         if (preferredEventId) {
           setForm((prev) => ({
             ...prev,
-            eventId: prev.eventId || preferredEventId,
+            eventId: preferredEventId,
           }));
         }
       } catch (err) {
@@ -275,7 +277,7 @@ export default function UserRegistration() {
     e.preventDefault();
 
     const resolvedEventId =
-      form.eventId || getPreferredEventId(events) || getActiveEventId();
+      getPreferredEventId(events) || getActiveEventId() || form.eventId;
     const submissionForm = {
       ...form,
       eventId: resolvedEventId,
@@ -312,7 +314,7 @@ export default function UserRegistration() {
       alert("Registration submitted successfully! Awaiting admin approval.");
 
       setForm({
-        eventId: getActiveEventId() || "",
+        eventId: getPreferredEventId(events) || getActiveEventId() || "",
         playerName: "",
         fatherName: "",
         email: "",
@@ -865,7 +867,7 @@ export default function UserRegistration() {
                   disabled
                   value={
                     events.find((e) => e.id === form.eventId)?.name ||
-                    "Jharkhand Senior State Championship"
+                    FIXED_EVENT_NAME
                   }
                   placeholder="Event"
                 />
