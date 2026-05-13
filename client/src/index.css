@@ -859,7 +859,9 @@ select optgroup {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  touch-action: manipulation;
+  -webkit-overflow-scrolling: touch;
+  touch-action: auto;
+  pointer-events: auto;
 }
 
 .capture-modal-shell {
