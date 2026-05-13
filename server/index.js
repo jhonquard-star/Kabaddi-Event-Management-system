@@ -8,8 +8,19 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const clientOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
-app.use(cors());
+const corsOptions = clientOrigins.length
+  ? {
+      origin: clientOrigins,
+      credentials: false,
+    }
+  : undefined;
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
