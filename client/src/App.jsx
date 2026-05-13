@@ -4,6 +4,8 @@ import {
   Route,
   useLocation,
 } from "react-router-dom";
+import { Menu } from "lucide-react";
+import { useEffect, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import BrandingBar from "./components/BrandingBar";
 import Dashboard from "./pages/Dashboard";
@@ -21,13 +23,44 @@ import "./index.css";
 function AppRouter() {
   const location = useLocation();
   const hideSidebar = location.pathname === "/";
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [location.pathname]);
 
   return (
     <>
       <BrandingBar />
       <div className="app-layout">
-        {!hideSidebar && <Sidebar />}
+        {!hideSidebar && mobileSidebarOpen && (
+          <button
+            type="button"
+            className="sidebar-backdrop"
+            aria-label="Close navigation menu"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+        )}
+        {!hideSidebar && (
+          <Sidebar
+            isMobileOpen={mobileSidebarOpen}
+            onClose={() => setMobileSidebarOpen(false)}
+          />
+        )}
         <main className="main-content">
+          {!hideSidebar && (
+            <div className="mobile-nav-bar">
+              <button
+                type="button"
+                className="mobile-nav-toggle btn btn-secondary"
+                onClick={() => setMobileSidebarOpen(true)}
+                aria-label="Open navigation menu"
+              >
+                <Menu size={18} />
+                Menu
+              </button>
+            </div>
+          )}
           <Routes>
             <Route path="/" element={<UserRegistration />} />
             <Route path="/dashboard" element={<Dashboard />} />

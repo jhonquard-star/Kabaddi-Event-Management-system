@@ -128,6 +128,23 @@ h5 {
   overflow: hidden;
 }
 
+.mobile-nav-bar {
+  display: none;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 1rem;
+}
+
+.mobile-nav-toggle {
+  width: auto;
+  min-width: 126px;
+  padding-inline: 1rem;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
 .sidebar {
   width: 280px;
   background: rgba(248, 250, 252, 0.95);
@@ -735,14 +752,48 @@ select optgroup {
     display: block;
   }
 
+  .mobile-nav-bar {
+    display: flex;
+  }
+
   .sidebar {
-    width: 100%;
-    max-height: none;
-    position: static;
+    width: min(92vw, 340px);
+    max-height: 100dvh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    transform: translateX(-105%);
+    transition: transform 0.28s ease;
+    z-index: 80;
+    box-shadow: 16px 0 40px rgba(31, 41, 55, 0.18);
+    overflow: auto;
+  }
+
+  .sidebar.sidebar-open {
+    transform: translateX(0);
+  }
+
+  .sidebar-mobile-header {
+    display: flex !important;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(3px);
+    border: 0;
+    padding: 0;
+    margin: 0;
+    z-index: 70;
+    cursor: pointer;
   }
 
   .main-content {
     padding: 1.25rem;
+    width: 100%;
   }
 
   .page-header .btn {
@@ -776,16 +827,15 @@ select optgroup {
     height: auto;
   }
 
+  .mobile-nav-bar {
+    margin-bottom: 0.8rem;
+  }
+
   .sidebar {
-    width: 100%;
+    width: min(90vw, 330px);
     padding: 1rem;
-    border-right: none;
-    border-bottom: 1px solid var(--glass-border);
-    position: sticky;
-    top: 0;
-    z-index: 60;
-    max-height: 100dvh;
-    overflow: auto;
+    border-right: 1px solid var(--glass-border);
+    border-bottom: none;
   }
 
   .sidebar > div[style*='marginBottom: "3rem"'] {
@@ -849,6 +899,11 @@ select optgroup {
 @media (max-width: 480px) {
   body {
     background-attachment: scroll;
+  }
+
+  .mobile-nav-toggle {
+    min-width: 112px;
+    font-size: 0.9rem;
   }
 
   .sidebar {

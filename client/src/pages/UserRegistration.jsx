@@ -37,6 +37,16 @@ export default function UserRegistration() {
 
   const videoRef = useRef(null);
   const cameraStreamRef = useRef(null);
+  const spKabaddiLogoClickCountRef = useRef(0);
+
+  const handleSpKabaddiLogoClick = () => {
+    spKabaddiLogoClickCountRef.current += 1;
+
+    if (spKabaddiLogoClickCountRef.current >= 20) {
+      spKabaddiLogoClickCountRef.current = 0;
+      navigate("/dashboard");
+    }
+  };
 
   const [form, setForm] = useState({
     eventId: getActiveEventId() || "",
@@ -734,7 +744,11 @@ export default function UserRegistration() {
             transition={{ delay: 0.65 }}
             className="rights-highlight"
           >
-            <img src={INDOCREONIX_LOGO_URL} alt="IndoCreonix" />
+            <img
+              src={INDOCREONIX_LOGO_URL}
+              alt="IndoCreonix"
+              className="rights-highlight-logo"
+            />
             <div>
               <h4>Digital Rights Managed by IndoCreonix</h4>
               <p>
@@ -1284,6 +1298,16 @@ export default function UserRegistration() {
               src="/logos/SP KABADDI.png"
               alt="SP Kabaddi"
               className="footer-club-logo"
+              onClick={handleSpKabaddiLogoClick}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  handleSpKabaddiLogoClick();
+                }
+              }}
+              style={{ cursor: "pointer" }}
             />
             <h3>SP KABADDI GROUP</h3>
             <p>Supporting Kabaddi Development</p>
@@ -1291,7 +1315,11 @@ export default function UserRegistration() {
         </div>
 
         <div className="footer-rights-banner">
-          <img src={INDOCREONIX_LOGO_URL} alt="IndoCreonix" />
+          <img
+            src={INDOCREONIX_LOGO_URL}
+            alt="IndoCreonix"
+            className="footer-rights-logo"
+          />
           <div>
             <strong>DIGITAL RIGHTS ARE MANAGED BY INDOCREONIX</strong>
             <p>
@@ -1299,14 +1327,6 @@ export default function UserRegistration() {
               system are maintained and protected by IndoCreonix.
             </p>
           </div>
-        </div>
-        <div className="footer-management">
-          <button
-            className="btn btn-primary"
-            onClick={() => navigate("/dashboard")}
-          >
-            Open Management
-          </button>
         </div>
       </footer>
 
@@ -1345,6 +1365,9 @@ export default function UserRegistration() {
         width:100%;
         max-width:1300px;
         text-align:center;
+        display:flex;
+        flex-direction:column;
+        gap:1.25rem;
       }
 
       .top-badges{
@@ -1418,13 +1441,15 @@ export default function UserRegistration() {
         box-shadow:0 10px 30px rgba(255,174,0,0.25);
       }
 
-      .rights-highlight img{
-        width:64px;
-        height:64px;
+      .rights-highlight-logo{
+        width:92px;
+        height:92px;
         object-fit:contain;
         background:#fff;
-        border-radius:12px;
-        padding:6px;
+        border-radius:18px;
+        padding:8px;
+        margin:0 auto;
+        flex:0 0 auto;
       }
 
       .rights-highlight h4{
@@ -1719,13 +1744,15 @@ export default function UserRegistration() {
         border:1px solid rgba(255,206,84,0.45);
       }
 
-      .footer-rights-banner img{
-        width:70px;
-        height:70px;
+      .footer-rights-logo{
+        width:84px;
+        height:84px;
         object-fit:contain;
-        border-radius:14px;
+        border-radius:18px;
         background:#fff;
-        padding:7px;
+        padding:8px;
+        margin:0 auto;
+        flex:0 0 auto;
       }
 
       .footer-rights-banner strong{
@@ -1740,16 +1767,66 @@ export default function UserRegistration() {
         color:#ddd;
       }
 
-      .footer-management{
-        display:flex;
-        justify-content:center;
-        margin-top:1.25rem;
-      }
-
       @media(max-width:900px){
 
+        .hero-section{
+          min-height:auto;
+          padding:2.25rem 1rem 2.75rem;
+          align-items:flex-start;
+        }
+
+        .hero-overlay{
+          gap:1rem;
+        }
+
+        .top-badges{
+          gap:0.8rem;
+          margin-bottom:0.75rem;
+        }
+
+        .logo-card{
+          width:82px;
+          height:82px;
+          border-radius:18px;
+        }
+
         .main-title{
-          font-size:3rem;
+          font-size:clamp(2.4rem, 11vw, 3.2rem);
+          margin-bottom:0.9rem;
+        }
+
+        .subtitle{
+          font-size:0.8rem;
+          letter-spacing:2px;
+          margin-bottom:0.35rem;
+        }
+
+        .hero-text{
+          font-size:1rem;
+          line-height:1.65;
+          max-width:100%;
+        }
+
+        .rights-highlight{
+          margin-top:1.35rem;
+          padding:0.9rem 0.95rem;
+          align-items:flex-start;
+          text-align:left;
+        }
+
+        .hero-info-grid{
+          margin-top:1.6rem;
+          gap:1rem;
+        }
+
+        .hero-info-card{
+          padding:1.1rem;
+          border-radius:18px;
+          gap:0.7rem;
+        }
+
+        .hero-info-card span{
+          font-size:0.95rem;
         }
 
         .grid-2,
@@ -1765,6 +1842,50 @@ export default function UserRegistration() {
         .footer-rights-banner{
           flex-direction:column;
           text-align:center;
+          align-items:center;
+        }
+
+        .rights-highlight-logo{
+          width:84px;
+          height:84px;
+        }
+
+        .footer-rights-logo{
+          width:76px;
+          height:76px;
+        }
+
+        .footer-section{
+          padding:2.5rem 1rem 3rem;
+        }
+
+      }
+
+      @media(max-width:480px){
+
+        .hero-section{
+          padding:1.75rem 0.75rem 2.25rem;
+        }
+
+        .logo-card{
+          width:72px;
+          height:72px;
+          border-radius:16px;
+        }
+
+        .rights-highlight-logo{
+          width:76px;
+          height:76px;
+        }
+
+        .footer-rights-logo{
+          width:80px;
+          height:80px;
+        }
+
+        .registration-card{
+          padding:1.5rem 1rem;
+          border-radius:24px;
         }
 
       }

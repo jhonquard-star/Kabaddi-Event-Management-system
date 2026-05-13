@@ -12,6 +12,7 @@ import {
   ClipboardList,
   FileSignature,
   CalendarRange,
+  X,
 } from "lucide-react";
 import {
   EVENT_CHANGE_EVENT,
@@ -21,7 +22,7 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-const Sidebar = () => {
+const Sidebar = ({ isMobileOpen = false, onClose = () => {} }) => {
   const [events, setEvents] = useState([]);
   const [selectedEventId, setSelectedEvent] = useState(getActiveEventId());
 
@@ -78,7 +79,22 @@ const Sidebar = () => {
   ];
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isMobileOpen ? "sidebar-open" : ""}`}>
+      <div className="sidebar-mobile-header">
+        <div>
+          <div className="sidebar-mobile-kicker">Navigation</div>
+          <div className="sidebar-mobile-title">Kabaddi Menu</div>
+        </div>
+        <button
+          type="button"
+          className="sidebar-close-button"
+          onClick={onClose}
+          aria-label="Close navigation menu"
+        >
+          <X size={18} />
+        </button>
+      </div>
+
       <div style={{ marginBottom: "1rem" }}>
         <label className="form-label" style={{ marginBottom: "0.35rem" }}>
           Active Event
@@ -173,6 +189,7 @@ const Sidebar = () => {
                 className={({ isActive }) =>
                   `nav-link ${isActive ? "active" : ""}`
                 }
+                onClick={onClose}
               >
                 <link.icon size={18} />
                 {link.label}
@@ -204,6 +221,7 @@ const Sidebar = () => {
                 className={({ isActive }) =>
                   `nav-link ${isActive ? "active" : ""}`
                 }
+                onClick={onClose}
               >
                 <link.icon size={18} />
                 {link.label}
@@ -260,6 +278,50 @@ const Sidebar = () => {
           color: var(--secondary);
         }
         .nav-link:hover svg {
+          color: var(--secondary);
+        }
+
+        .sidebar-mobile-header {
+          display: none;
+          align-items: center;
+          justify-content: space-between;
+          gap: 1rem;
+          margin-bottom: 1rem;
+          padding-bottom: 1rem;
+          border-bottom: 1px solid var(--glass-border);
+        }
+
+        .sidebar-mobile-kicker {
+          color: var(--text-muted);
+          font-size: 0.72rem;
+          font-weight: 800;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          margin-bottom: 0.25rem;
+        }
+
+        .sidebar-mobile-title {
+          color: var(--primary);
+          font-size: 1.05rem;
+          font-weight: 800;
+        }
+
+        .sidebar-close-button {
+          width: 42px;
+          height: 42px;
+          border-radius: 12px;
+          border: 1px solid var(--glass-border);
+          background: rgba(255, 255, 255, 0.95);
+          color: var(--primary);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          flex: 0 0 auto;
+        }
+
+        .sidebar-close-button:hover {
+          background: rgba(79, 70, 229, 0.08);
           color: var(--secondary);
         }
       `}</style>
