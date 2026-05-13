@@ -39,6 +39,22 @@ export default function UserRegistration() {
   const cameraStreamRef = useRef(null);
   const spKabaddiLogoClickCountRef = useRef(0);
 
+  const getPreferredEventId = (eventList = []) => {
+    const activeEventId = getActiveEventId();
+    if (activeEventId) {
+      return activeEventId;
+    }
+
+    const seniorEvent = eventList.find(
+      (ev) =>
+        /senior/i.test(ev.name) ||
+        /state/i.test(ev.name) ||
+        /senior state/i.test(ev.name),
+    );
+
+    return seniorEvent?.id || eventList[0]?.id || "";
+  };
+
   const handleSpKabaddiLogoClick = () => {
     spKabaddiLogoClickCountRef.current += 1;
 
@@ -73,7 +89,11 @@ export default function UserRegistration() {
       const saved = localStorage.getItem("userRegistrationForm");
       if (saved) {
         const parsed = JSON.parse(saved);
-        setForm((prev) => ({ ...prev, ...parsed }));
+        setForm((prev) => ({
+          ...prev,
+          ...parsed,
+          eventId: parsed.eventId || prev.eventId || getActiveEventId(),
+        }));
         if (parsed.photoUrl) setPhotoPreview(parsed.photoUrl);
         if (parsed.aadharFrontUrl) setAadharFrontPreview(parsed.aadharFrontUrl);
         if (parsed.aadharBackUrl) setAadharBackPreview(parsed.aadharBackUrl);
@@ -145,15 +165,12 @@ export default function UserRegistration() {
         const res = await axios.get(`${API_URL}/api/matches/events`);
         const list = Array.isArray(res.data) ? res.data : [];
         setEvents(list);
-        // try to preselect senior/state championship event if present
-        const seniorEvent = list.find(
-          (ev) =>
-            /senior/i.test(ev.name) ||
-            /state/i.test(ev.name) ||
-            /senior state/i.test(ev.name),
-        );
-        if (seniorEvent?.id) {
-          setForm((prev) => ({ ...prev, eventId: seniorEvent.id }));
+        const preferredEventId = getPreferredEventId(list);
+        if (preferredEventId) {
+          setForm((prev) => ({
+            ...prev,
+            eventId: prev.eventId || preferredEventId,
+          }));
         }
       } catch (err) {
         console.log(err);
@@ -257,8 +274,19 @@ export default function UserRegistration() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    const resolvedEventId =
+      form.eventId || getPreferredEventId(events) || getActiveEventId();
+    const submissionForm = {
+      ...form,
+      eventId: resolvedEventId,
+    };
+
+    if (resolvedEventId && resolvedEventId !== form.eventId) {
+      setForm((prev) => ({ ...prev, eventId: resolvedEventId }));
+    }
+
     const validation = validatePlayerIdentity({
-      player: form,
+      player: submissionForm,
       existingPlayers: [],
     });
 
