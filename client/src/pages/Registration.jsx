@@ -7,6 +7,9 @@ import {
   Upload,
   ArrowRight,
   CheckCircle,
+  SlidersHorizontal,
+  ShieldCheck,
+  X,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -20,6 +23,14 @@ import {
   calculateAgeFromDob,
 } from "../utils/playerValidation";
 import { API_URL } from "../utils/apiBase";
+
+const INDOCREONIX_LOGO = "https://indocreonix.com/logo.png";
+const PARTNER_LOGOS = [
+  { src: "/logos/AKFI.png", alt: "AKFI" },
+  { src: "/logos/DDKA.png", alt: "DDKA" },
+  { src: "/logos/JSKA.png", alt: "JSKA" },
+  { src: "/logos/SP%20KABADDI.png", alt: "SP Kabaddi" },
+];
 
 const Registration = () => {
   const [tab, setTab] = useState("team");
@@ -35,10 +46,15 @@ const Registration = () => {
   const [photoPreview, setPhotoPreview] = useState(null);
   const [aadharFrontPreview, setAadharFrontPreview] = useState(null);
   const [aadharBackPreview, setAadharBackPreview] = useState(null);
-  const [cameraOpen, setCameraOpen] = useState(false);
-  const [aadharCameraMode, setAadharCameraMode] = useState(null); // "front", "back", or null
+  const [activeCameraTarget, setActiveCameraTarget] = useState(null);
+  const [captureAdjustments, setCaptureAdjustments] = useState({
+    brightness: 100,
+    contrast: 100,
+    saturate: 100,
+    zoom: 100,
+  });
   const [pendingSubmissions, setPendingSubmissions] = useState([]);
-  const videoRef = useRef(null);
+  const cameraModalVideoRef = useRef(null);
   const cameraStreamRef = useRef(null);
   const [formData, setFormData] = useState({
     eventId: "",
@@ -170,6 +186,42 @@ const Registration = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!cameraStreamRef.current || !activeCameraTarget) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      if (cameraModalVideoRef.current) {
+        cameraModalVideoRef.current.srcObject = cameraStreamRef.current;
+        cameraModalVideoRef.current.play().catch(() => {});
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [activeCameraTarget]);
+
+  useEffect(() => {
+    if (!activeCameraTarget) {
+      return;
+    }
+
+    const onEscape = (event) => {
+      if (event.key === "Escape") {
+        stopLiveCamera();
+      }
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onEscape);
+    };
+  }, [activeCameraTarget]);
+
   const handlePhotoUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -197,18 +249,29 @@ const Registration = () => {
     }
   };
 
-  const startLiveCamera = async () => {
+  const startLiveCamera = async (target) => {
     try {
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: false,
       });
+
       cameraStreamRef.current = stream;
-      setCameraOpen(true);
+      setActiveCameraTarget(target);
+      setCaptureAdjustments({
+        brightness: 100,
+        contrast: 100,
+        saturate: 100,
+        zoom: 100,
+      });
       setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(() => {});
+        if (cameraModalVideoRef.current) {
+          cameraModalVideoRef.current.srcObject = stream;
+          cameraModalVideoRef.current.play().catch(() => {});
         }
       }, 0);
     } catch {
@@ -221,11 +284,16 @@ const Registration = () => {
       cameraStreamRef.current.getTracks().forEach((track) => track.stop());
       cameraStreamRef.current = null;
     }
-    setCameraOpen(false);
+    if (cameraModalVideoRef.current) {
+      cameraModalVideoRef.current.srcObject = null;
+    }
+    setActiveCameraTarget(null);
   };
 
-  const captureLivePhoto = (mode = "player") => {
-    const video = videoRef.current;
+  const captureLivePhoto = () => {
+    if (!activeCameraTarget) return;
+
+    const video = cameraModalVideoRef.current;
     if (!video) return;
 
     const canvas = document.createElement("canvas");
@@ -234,16 +302,33 @@ const Registration = () => {
     const context = canvas.getContext("2d");
     if (!context) return;
 
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const zoomScale = Math.max(captureAdjustments.zoom / 100, 1);
+    const sourceWidth = video.videoWidth / zoomScale;
+    const sourceHeight = video.videoHeight / zoomScale;
+    const sourceX = (video.videoWidth - sourceWidth) / 2;
+    const sourceY = (video.videoHeight - sourceHeight) / 2;
+
+    context.filter = `brightness(${captureAdjustments.brightness}%) contrast(${captureAdjustments.contrast}%) saturate(${captureAdjustments.saturate}%)`;
+    context.drawImage(
+      video,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    );
     const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
 
-    if (mode === "player") {
+    if (activeCameraTarget === "player") {
       setPhotoPreview(dataUrl);
       setFormData((current) => ({ ...current, photoUrl: dataUrl }));
-    } else if (mode === "front") {
+    } else if (activeCameraTarget === "front") {
       setAadharFrontPreview(dataUrl);
       setFormData((current) => ({ ...current, aadharFrontUrl: dataUrl }));
-    } else if (mode === "back") {
+    } else if (activeCameraTarget === "back") {
       setAadharBackPreview(dataUrl);
       setFormData((current) => ({ ...current, aadharBackUrl: dataUrl }));
     }
@@ -251,9 +336,20 @@ const Registration = () => {
     stopLiveCamera();
   };
 
-  const startAadharCamera = (side) => {
-    setAadharCameraMode(side);
-    startLiveCamera();
+  const getCaptureTargetLabel = () => {
+    if (activeCameraTarget === "player") return "Player Photo";
+    if (activeCameraTarget === "front") return "Aadhar Front";
+    if (activeCameraTarget === "back") return "Aadhar Back";
+    return "Capture";
+  };
+
+  const modalPreviewStyle = {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    filter: `brightness(${captureAdjustments.brightness}%) contrast(${captureAdjustments.contrast}%) saturate(${captureAdjustments.saturate}%)`,
+    transform: `scale(${captureAdjustments.zoom / 100})`,
+    transformOrigin: "center center",
   };
 
   const handleAadharFileUpload = (e, side) => {
@@ -333,6 +429,7 @@ const Registration = () => {
   };
 
   const resetForm = () => {
+    stopLiveCamera();
     setFormData({
       eventId: getActiveEventId(),
       teamName: "",
@@ -399,7 +496,7 @@ const Registration = () => {
   };
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in registration-page">
       <header style={{ marginBottom: "2rem" }}>
         <h1 className="title-glow">
           Registration <span className="text-gradient">Portal</span>
@@ -411,28 +508,15 @@ const Registration = () => {
       </header>
 
       {pendingSubmissions && pendingSubmissions.length > 0 && (
-        <div
-          className="glass-panel"
-          style={{ padding: "1rem", maxWidth: "900px", margin: "0 auto 1rem" }}
-        >
+        <div className="glass-panel registration-panel registration-pending-panel">
           <h3 style={{ marginBottom: "0.5rem" }}>Pending User Registrations</h3>
           <p className="muted" style={{ marginBottom: "1rem" }}>
             These submissions were made by users and require admin approval
             before being added to the official roster.
           </p>
-          <div style={{ display: "grid", gap: "0.75rem" }}>
+          <div className="registration-pending-list">
             {pendingSubmissions.map((p) => (
-              <div
-                key={p.id}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "0.5rem",
-                  borderRadius: 8,
-                  background: "rgba(255,255,255,0.02)",
-                }}
-              >
+              <div key={p.id} className="registration-pending-item">
                 <div>
                   <div style={{ fontWeight: 700 }}>{p.data.playerName}</div>
                   <div className="muted">
@@ -442,7 +526,7 @@ const Registration = () => {
                     Email: {p.data.email} • Aadhar: {p.data.aadhar}
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
+                <div className="registration-pending-actions">
                   <button
                     className="btn btn-primary"
                     onClick={() => approvePending(p.id)}
@@ -463,23 +547,13 @@ const Registration = () => {
         </div>
       )}
 
-      <div
-        className="glass-panel"
-        style={{ padding: "2.5rem", maxWidth: "900px", margin: "0 auto" }}
-      >
+      <div className="glass-panel registration-panel registration-main-panel">
         {step !== 3 && (
-          <div
-            style={{
-              display: "flex",
-              gap: "1rem",
-              marginBottom: "3rem",
-              borderBottom: "1px solid var(--glass-border)",
-              paddingBottom: "1.5rem",
-            }}
-          >
+          <div className="registration-tab-row">
             <button
               className={`btn ${tab === "team" ? "btn-primary" : "btn-secondary"}`}
               onClick={() => {
+                stopLiveCamera();
                 setTab("team");
                 setStep(1);
               }}
@@ -489,6 +563,7 @@ const Registration = () => {
             <button
               className={`btn ${tab === "player" ? "btn-primary" : "btn-secondary"}`}
               onClick={() => {
+                stopLiveCamera();
                 setTab("player");
                 setStep(1);
               }}
@@ -518,13 +593,7 @@ const Registration = () => {
                   <span className="muted">{geoNotice}</span>
                 </div>
               )}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "2rem",
-                }}
-              >
+              <div className="registration-team-grid">
                 <div className="form-group">
                   <label className="form-label">Team Name</label>
                   <input
@@ -659,43 +728,10 @@ const Registration = () => {
                   <span className="muted">{geoNotice}</span>
                 </div>
               )}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "320px 1fr",
-                  gap: "2rem",
-                }}
-              >
-                <div style={{ textAlign: "center" }}>
-                  <div
-                    style={{
-                      width: "100%",
-                      height: "350px",
-                      background: "rgba(0,0,0,0.3)",
-                      borderRadius: "20px",
-                      border: "2px dashed var(--glass-border)",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                      marginBottom: "1rem",
-                      position: "relative",
-                    }}
-                  >
-                    {cameraOpen ? (
-                      <video
-                        ref={videoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                        }}
-                      />
-                    ) : photoPreview ? (
+              <div className="registration-player-layout">
+                <div className="registration-photo-column">
+                  <div className="registration-photo-preview">
+                    {photoPreview ? (
                       <img
                         src={photoPreview}
                         style={{
@@ -722,24 +758,14 @@ const Registration = () => {
                     <button
                       type="button"
                       className="btn btn-primary"
-                      onClick={
-                        cameraOpen
-                          ? () => captureLivePhoto(aadharCameraMode || "player")
-                          : startLiveCamera
+                      disabled={
+                        !!activeCameraTarget && activeCameraTarget !== "player"
                       }
+                      onClick={() => startLiveCamera("player")}
                     >
-                      <Camera size={18} />{" "}
-                      {cameraOpen ? "Capture Live Photo" : "Take Live Photo"}
+                      <Camera size={18} />
+                      {photoPreview ? "Retake Player Photo" : "Take Live Photo"}
                     </button>
-                    {cameraOpen && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={stopLiveCamera}
-                      >
-                        Cancel Camera
-                      </button>
-                    )}
                     <label
                       className="btn btn-secondary"
                       style={{ width: "100%" }}
@@ -755,13 +781,7 @@ const Registration = () => {
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "1.25rem",
-                  }}
-                >
+                <div className="registration-player-grid">
                   <div className="form-group" style={{ gridColumn: "1 / -1" }}>
                     <label className="form-label">Full Name</label>
                     <input
@@ -984,22 +1004,9 @@ const Registration = () => {
                   Aadhar for verification.
                 </p>
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "1.5rem",
-                    marginBottom: "1.5rem",
-                  }}
-                >
+                <div className="registration-aadhar-grid">
                   {/* AADHAR FRONT */}
-                  <div
-                    style={{
-                      border: "1px solid var(--glass-border)",
-                      borderRadius: "8px",
-                      padding: "1rem",
-                    }}
-                  >
+                  <div className="registration-aadhar-card">
                     <label
                       style={{
                         fontWeight: 600,
@@ -1010,19 +1017,7 @@ const Registration = () => {
                     >
                       Aadhar Front Side
                     </label>
-                    <div
-                      style={{
-                        width: "100%",
-                        height: "200px",
-                        background: "rgba(0,0,0,0.2)",
-                        borderRadius: "8px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        marginBottom: "0.75rem",
-                        overflow: "hidden",
-                      }}
-                    >
+                    <div className="registration-aadhar-preview">
                       {aadharFrontPreview ? (
                         <img
                           src={aadharFrontPreview}
@@ -1051,7 +1046,10 @@ const Registration = () => {
                         type="button"
                         className="btn btn-primary"
                         style={{ fontSize: "0.9rem" }}
-                        onClick={() => startAadharCamera("front")}
+                        disabled={
+                          !!activeCameraTarget && activeCameraTarget !== "front"
+                        }
+                        onClick={() => startLiveCamera("front")}
                       >
                         <Camera size={16} />{" "}
                         {aadharFrontPreview ? "Retake Front" : "Capture Front"}
@@ -1072,13 +1070,7 @@ const Registration = () => {
                   </div>
 
                   {/* AADHAR BACK */}
-                  <div
-                    style={{
-                      border: "1px solid var(--glass-border)",
-                      borderRadius: "8px",
-                      padding: "1rem",
-                    }}
-                  >
+                  <div className="registration-aadhar-card">
                     <label
                       style={{
                         fontWeight: 600,
@@ -1089,19 +1081,7 @@ const Registration = () => {
                     >
                       Aadhar Back Side
                     </label>
-                    <div
-                      style={{
-                        width: "100%",
-                        height: "200px",
-                        background: "rgba(0,0,0,0.2)",
-                        borderRadius: "8px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        marginBottom: "0.75rem",
-                        overflow: "hidden",
-                      }}
-                    >
+                    <div className="registration-aadhar-preview">
                       {aadharBackPreview ? (
                         <img
                           src={aadharBackPreview}
@@ -1130,7 +1110,10 @@ const Registration = () => {
                         type="button"
                         className="btn btn-primary"
                         style={{ fontSize: "0.9rem" }}
-                        onClick={() => startAadharCamera("back")}
+                        disabled={
+                          !!activeCameraTarget && activeCameraTarget !== "back"
+                        }
+                        onClick={() => startLiveCamera("back")}
                       >
                         <Camera size={16} />{" "}
                         {aadharBackPreview ? "Retake Back" : "Capture Back"}
@@ -1152,12 +1135,6 @@ const Registration = () => {
                 </div>
               </div>
 
-              {cameraOpen && (
-                <div className="camera-box">
-                  <video ref={videoRef} autoPlay muted playsInline />
-                </div>
-              )}
-
               <div
                 style={{
                   marginTop: "2rem",
@@ -1177,6 +1154,163 @@ const Registration = () => {
                 </button>
               </div>
             </motion.form>
+          )}
+
+          {activeCameraTarget && (
+            <div
+              className="capture-modal-overlay"
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="capture-modal-shell">
+                <div className="capture-modal-topbar">
+                  <div className="capture-brand-wrap">
+                    <img
+                      src={INDOCREONIX_LOGO}
+                      alt="IndoCreonix"
+                      className="capture-brand-logo"
+                    />
+                    <div>
+                      <p className="capture-brand-title">Capture Studio</p>
+                      <p className="capture-brand-sub">
+                        Protected by IndoCreonix
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="capture-close-btn"
+                    onClick={stopLiveCamera}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="capture-modal-content">
+                  <div className="capture-preview-stage">
+                    <video
+                      ref={cameraModalVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      style={modalPreviewStyle}
+                    />
+                    <div className="capture-target-pill">
+                      Now capturing: {getCaptureTargetLabel()}
+                    </div>
+                  </div>
+
+                  <div className="capture-control-panel">
+                    <h3>
+                      <SlidersHorizontal size={18} /> Fine Tune Capture
+                    </h3>
+                    <label className="capture-control-row">
+                      <span>Brightness</span>
+                      <input
+                        type="range"
+                        min="70"
+                        max="130"
+                        value={captureAdjustments.brightness}
+                        onChange={(e) =>
+                          setCaptureAdjustments((current) => ({
+                            ...current,
+                            brightness: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="capture-control-row">
+                      <span>Contrast</span>
+                      <input
+                        type="range"
+                        min="70"
+                        max="130"
+                        value={captureAdjustments.contrast}
+                        onChange={(e) =>
+                          setCaptureAdjustments((current) => ({
+                            ...current,
+                            contrast: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="capture-control-row">
+                      <span>Saturation</span>
+                      <input
+                        type="range"
+                        min="70"
+                        max="130"
+                        value={captureAdjustments.saturate}
+                        onChange={(e) =>
+                          setCaptureAdjustments((current) => ({
+                            ...current,
+                            saturate: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="capture-control-row">
+                      <span>Zoom</span>
+                      <input
+                        type="range"
+                        min="100"
+                        max="180"
+                        value={captureAdjustments.zoom}
+                        onChange={(e) =>
+                          setCaptureAdjustments((current) => ({
+                            ...current,
+                            zoom: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+
+                    <div className="capture-partner-strip">
+                      {PARTNER_LOGOS.map((logo) => (
+                        <img key={logo.alt} src={logo.src} alt={logo.alt} />
+                      ))}
+                    </div>
+
+                    <div className="capture-security-note">
+                      <ShieldCheck size={16} />
+                      Secure preview session. Image is saved only when you click
+                      Apply.
+                    </div>
+
+                    <div className="capture-actions">
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() =>
+                          setCaptureAdjustments({
+                            brightness: 100,
+                            contrast: 100,
+                            saturate: 100,
+                            zoom: 100,
+                          })
+                        }
+                      >
+                        Reset Adjustments
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={stopLiveCamera}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={captureLivePhoto}
+                      >
+                        Apply & Save
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
 
           {step === 3 && (

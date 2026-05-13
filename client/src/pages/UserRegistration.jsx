@@ -8,6 +8,8 @@ import {
   Medal,
   ChevronRight,
   Upload,
+  SlidersHorizontal,
+  ShieldCheck,
 } from "lucide-react";
 import axios from "axios";
 import { motion } from "framer-motion";
@@ -22,6 +24,12 @@ const HERO_BG_URL =
   "https://res.cloudinary.com/dcqo5qt7b/image/upload/v1767294465/ddka_gallery/yc2i3aphkskozb3sktyl.jpg";
 const INDOCREONIX_LOGO_URL = "https://indocreonix.com/logo.png";
 const FIXED_EVENT_NAME = "Jharkhand Senior State Championship";
+const PARTNER_LOGOS = [
+  { src: "/logos/AKFI.png", alt: "AKFI" },
+  { src: "/logos/DDKA.png", alt: "DDKA" },
+  { src: "/logos/JSKA.png", alt: "JSKA" },
+  { src: "/logos/SP%20KABADDI.png", alt: "SP Kabaddi" },
+];
 
 const buildSavedRegistrationState = () => {
   const defaultForm = {
@@ -88,6 +96,7 @@ const buildSavedRegistrationState = () => {
 export default function UserRegistration() {
   const navigate = useNavigate();
   const [events, setEvents] = useState([]);
+  const [teams, setTeams] = useState([]);
   const savedRegistrationState = buildSavedRegistrationState();
   const [photoPreview, setPhotoPreview] = useState(
     savedRegistrationState.photoPreview,
@@ -98,13 +107,15 @@ export default function UserRegistration() {
   const [aadharBackPreview, setAadharBackPreview] = useState(
     savedRegistrationState.aadharBackPreview,
   );
-  const [cameraOpen, setCameraOpen] = useState(false);
-  const [aadharCameraMode, setAadharCameraMode] = useState(null); // "front", "back", or null
-  const [cropModalOpen, setCropModalOpen] = useState(false);
-  const [cropImageSrc, setCropImageSrc] = useState(null);
-  const [cropTargetField, setCropTargetField] = useState(null); // 'photo' | 'aadharFront' | 'aadharBack'
+  const [activeCameraTarget, setActiveCameraTarget] = useState(null);
+  const [captureAdjustments, setCaptureAdjustments] = useState({
+    brightness: 100,
+    contrast: 100,
+    saturate: 100,
+    zoom: 100,
+  });
 
-  const videoRef = useRef(null);
+  const cameraModalVideoRef = useRef(null);
   const cameraStreamRef = useRef(null);
   const spKabaddiLogoClickCountRef = useRef(0);
 
@@ -219,21 +230,88 @@ export default function UserRegistration() {
     };
   }, []);
 
-  const startLiveCamera = async () => {
+  useEffect(() => {
+    if (!form.eventId) {
+      setTeams([]);
+      return;
+    }
+
+    const loadTeams = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/api/matches/teams`, {
+          params: { eventId: form.eventId },
+        });
+        setTeams(Array.isArray(response.data) ? response.data : []);
+      } catch (error) {
+        console.warn("Failed to load event teams", error);
+        setTeams([]);
+      }
+    };
+
+    loadTeams();
+  }, [form.eventId]);
+
+  useEffect(() => {
+    if (!cameraStreamRef.current || !activeCameraTarget) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      if (cameraModalVideoRef.current) {
+        cameraModalVideoRef.current.srcObject = cameraStreamRef.current;
+        cameraModalVideoRef.current.play().catch(() => {});
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [activeCameraTarget]);
+
+  useEffect(() => {
+    if (!activeCameraTarget) {
+      return;
+    }
+
+    const onEscape = (event) => {
+      if (event.key === "Escape") {
+        stopLiveCamera();
+      }
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onEscape);
+    };
+  }, [activeCameraTarget]);
+
+  const startLiveCamera = async (target) => {
     try {
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((t) => t.stop());
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
       });
 
       cameraStreamRef.current = stream;
-      setCameraOpen(true);
+      setActiveCameraTarget(target);
+      setCaptureAdjustments({
+        brightness: 100,
+        contrast: 100,
+        saturate: 100,
+        zoom: 100,
+      });
 
       setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play();
+        if (cameraModalVideoRef.current) {
+          cameraModalVideoRef.current.srcObject = stream;
+          cameraModalVideoRef.current.play().catch(() => {});
         }
-      }, 100);
+      }, 0);
     } catch {
       alert("Please allow camera access.");
     }
@@ -244,36 +322,72 @@ export default function UserRegistration() {
       cameraStreamRef.current.getTracks().forEach((t) => t.stop());
       cameraStreamRef.current = null;
     }
-
-    setCameraOpen(false);
+    if (cameraModalVideoRef.current) {
+      cameraModalVideoRef.current.srcObject = null;
+    }
+    setActiveCameraTarget(null);
   };
 
-  const captureLivePhoto = (mode = "player") => {
-    const video = videoRef.current;
+  const captureLivePhoto = () => {
+    if (!activeCameraTarget) return;
+
+    const video = cameraModalVideoRef.current;
     if (!video) return;
 
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
     const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+    if (!ctx) return;
 
-    // route captured image through crop modal for consistent layout/cropping
-    if (mode === "player") {
-      openCropModalWithImage(dataUrl, "photo");
-    } else if (mode === "front") {
-      openCropModalWithImage(dataUrl, "aadharFront");
-    } else if (mode === "back") {
-      openCropModalWithImage(dataUrl, "aadharBack");
+    const zoomScale = Math.max(captureAdjustments.zoom / 100, 1);
+    const sourceWidth = video.videoWidth / zoomScale;
+    const sourceHeight = video.videoHeight / zoomScale;
+    const sourceX = (video.videoWidth - sourceWidth) / 2;
+    const sourceY = (video.videoHeight - sourceHeight) / 2;
+
+    ctx.filter = `brightness(${captureAdjustments.brightness}%) contrast(${captureAdjustments.contrast}%) saturate(${captureAdjustments.saturate}%)`;
+    ctx.drawImage(
+      video,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    );
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+
+    if (activeCameraTarget === "player") {
+      setPhotoPreview(dataUrl);
+      setForm((prev) => ({ ...prev, photoUrl: dataUrl }));
+    } else if (activeCameraTarget === "front") {
+      setAadharFrontPreview(dataUrl);
+      setForm((prev) => ({ ...prev, aadharFrontUrl: dataUrl }));
+    } else if (activeCameraTarget === "back") {
+      setAadharBackPreview(dataUrl);
+      setForm((prev) => ({ ...prev, aadharBackUrl: dataUrl }));
     }
 
     stopLiveCamera();
   };
 
-  const startAadharCamera = (side) => {
-    setAadharCameraMode(side);
-    startLiveCamera();
+  const getCaptureTargetLabel = () => {
+    if (activeCameraTarget === "player") return "Player Photo";
+    if (activeCameraTarget === "front") return "Aadhar Front";
+    if (activeCameraTarget === "back") return "Aadhar Back";
+    return "Capture";
+  };
+
+  const modalPreviewStyle = {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    filter: `brightness(${captureAdjustments.brightness}%) contrast(${captureAdjustments.contrast}%) saturate(${captureAdjustments.saturate}%)`,
+    transform: `scale(${captureAdjustments.zoom / 100})`,
+    transformOrigin: "center center",
   };
 
   const handleAadharFileUpload = (e, side) => {
@@ -285,23 +399,15 @@ export default function UserRegistration() {
       const dataUrl = event.target?.result;
       if (!dataUrl) return;
 
-      // open crop modal to allow user to crop uploaded image
       if (side === "front") {
-        openCropModalWithImage(dataUrl, "aadharFront");
+        setAadharFrontPreview(dataUrl);
+        setForm((prev) => ({ ...prev, aadharFrontUrl: dataUrl }));
       } else if (side === "back") {
-        openCropModalWithImage(dataUrl, "aadharBack");
+        setAadharBackPreview(dataUrl);
+        setForm((prev) => ({ ...prev, aadharBackUrl: dataUrl }));
       }
     };
     reader.readAsDataURL(file);
-  };
-
-  // Generic handler to open crop modal with a dataURL and a target field
-  const openCropModalWithImage = (dataUrl, target) => {
-    setCropImageSrc(dataUrl);
-    setCropTargetField(target);
-    setCropModalOpen(true);
-    // stop camera if open
-    stopLiveCamera();
   };
 
   const handleSubmit = async (e) => {
@@ -341,8 +447,33 @@ export default function UserRegistration() {
       return alert("Please capture or upload Aadhar back image.");
     }
 
+    const matchingTeam =
+      teams.find((team) => {
+        const teamStateMatches =
+          !form.state ||
+          (team.state || "").trim().toLowerCase() ===
+            (form.state || "").trim().toLowerCase();
+        const teamDistrictMatches =
+          !form.district ||
+          (team.district || "").trim().toLowerCase() ===
+            (form.district || "").trim().toLowerCase();
+
+        return teamStateMatches && teamDistrictMatches;
+      }) || teams[0];
+
+    if (!matchingTeam?.id) {
+      return alert(
+        "No registered team is available for the selected event. Please contact the organizer.",
+      );
+    }
+
     try {
-      await axios.post(`${API_URL}/api/player-registration`, submissionForm);
+      const payload = {
+        ...submissionForm,
+        teamId: matchingTeam.id,
+      };
+
+      await axios.post(`${API_URL}/api/matches/players`, payload);
 
       alert("Registration submitted successfully! Awaiting admin approval.");
 
@@ -373,364 +504,6 @@ export default function UserRegistration() {
       alert("Error: " + (err.response?.data?.error || err.message));
     }
   };
-
-  // --- Simple crop modal implementation ---
-  const cropCanvasRef = useRef(null);
-  const cropStateRef = useRef({
-    dragging: false,
-    startX: 0,
-    startY: 0,
-    imgOffsetX: 0,
-    imgOffsetY: 0,
-    imgScale: 1,
-    baseScale: 1,
-    imgNaturalW: 0,
-    imgNaturalH: 0,
-    cropLeft: 0,
-    cropTop: 0,
-    cropW: 0,
-    cropH: 0,
-  });
-
-  const closeCropModal = () => {
-    setCropModalOpen(false);
-    setCropImageSrc(null);
-    setCropTargetField(null);
-  };
-
-  const finalizeCrop = (targetField) => {
-    const img = new Image();
-    img.onload = () => {
-      const state = cropStateRef.current;
-      const cvs = document.createElement("canvas");
-
-      // compute source rect in original image coordinates
-      const sx = (state.cropLeft - state.imgOffsetX) / state.imgScale;
-      const sy = (state.cropTop - state.imgOffsetY) / state.imgScale;
-      const sw = state.cropW / state.imgScale;
-      const sh = state.cropH / state.imgScale;
-
-      // choose target output size based on field
-      let outW = 600,
-        outH = 800; // default photo portrait
-      if (targetField === "aadharFront" || targetField === "aadharBack") {
-        outW = 800;
-        outH = 500; // landscape-ish for card
-      }
-
-      cvs.width = outW;
-      cvs.height = outH;
-      const ctx = cvs.getContext("2d");
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, outW, outH);
-
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
-      const dataUrl = cvs.toDataURL("image/jpeg", 0.92);
-
-      if (targetField === "photo") {
-        setPhotoPreview(dataUrl);
-        setForm((prev) => ({ ...prev, photoUrl: dataUrl }));
-      } else if (targetField === "aadharFront") {
-        setAadharFrontPreview(dataUrl);
-        setForm((prev) => ({ ...prev, aadharFrontUrl: dataUrl }));
-      } else if (targetField === "aadharBack") {
-        setAadharBackPreview(dataUrl);
-        setForm((prev) => ({ ...prev, aadharBackUrl: dataUrl }));
-      }
-
-      closeCropModal();
-    };
-    img.src = cropImageSrc;
-  };
-
-  // helper to clamp offsets when scale/position changes
-  const clampCropOffsets = () => {
-    const st = cropStateRef.current;
-    if (!st || !st.imgNaturalW) return;
-    const dw = st.imgNaturalW * st.imgScale;
-    const dh = st.imgNaturalH * st.imgScale;
-
-    const minX = st.cropLeft + st.cropW - dw;
-    const maxX = st.cropLeft;
-    const minY = st.cropTop + st.cropH - dh;
-    const maxY = st.cropTop;
-
-    if (dw <= st.cropW) {
-      st.imgOffsetX = st.cropLeft + (st.cropW - dw) / 2;
-    } else {
-      st.imgOffsetX = Math.min(maxX, Math.max(minX, st.imgOffsetX));
-    }
-
-    if (dh <= st.cropH) {
-      st.imgOffsetY = st.cropTop + (st.cropH - dh) / 2;
-    } else {
-      st.imgOffsetY = Math.min(maxY, Math.max(minY, st.imgOffsetY));
-    }
-  };
-
-  const renderCropEditor = (target) => {
-    if (!cropModalOpen || cropTargetField !== target) return null;
-
-    return (
-      <div
-        style={{
-          marginTop: "1rem",
-          padding: "1rem",
-          border: "1px solid var(--glass-border)",
-          borderRadius: "12px",
-          background: "rgba(255,255,255,0.03)",
-        }}
-      >
-        <h4 style={{ marginBottom: "0.5rem" }}>Adjust Image</h4>
-        <p style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
-          Drag the image to position it inside the fixed frame, then apply.
-        </p>
-        <div style={{ margin: "1rem 0" }}>
-          <canvas
-            ref={cropCanvasRef}
-            style={{
-              borderRadius: 8,
-              display: "block",
-              background: "#fff",
-              width: "100%",
-              maxHeight: "70vh",
-            }}
-          />
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              marginTop: 8,
-            }}
-          >
-            <div style={{ flex: 1 }} />
-            <button
-              className="photo-btn secondary-btn"
-              type="button"
-              onClick={() => {
-                const st = cropStateRef.current;
-                if (!st) return;
-                st.imgScale = st.baseScale;
-                st.imgOffsetX =
-                  st.cropLeft +
-                  st.cropW / 2 -
-                  (st.imgNaturalW * st.imgScale) / 2;
-                st.imgOffsetY =
-                  st.cropTop +
-                  st.cropH / 2 -
-                  (st.imgNaturalH * st.imgScale) / 2;
-                clampCropOffsets();
-                st.redraw && st.redraw();
-              }}
-            >
-              Reset
-            </button>
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button
-            className="photo-btn secondary-btn"
-            type="button"
-            onClick={() => closeCropModal()}
-          >
-            Cancel
-          </button>
-          <button
-            className="photo-btn primary-btn"
-            type="button"
-            onClick={() => finalizeCrop(cropTargetField)}
-          >
-            Apply
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  // Setup crop canvas when modal opens
-  useEffect(() => {
-    if (!cropModalOpen || !cropImageSrc) return;
-    const canvas = cropCanvasRef.current;
-    const ctx = canvas.getContext("2d");
-    const img = new Image();
-    img.onload = () => {
-      // canvas sizing (fit to viewport with limits)
-      const maxW = Math.min(900, Math.floor(window.innerWidth * 0.9));
-      const maxH = Math.min(700, Math.floor(window.innerHeight * 0.75));
-      const cw = maxW;
-      const ch = maxH;
-      canvas.width = cw;
-      canvas.height = ch;
-
-      // determine fixed crop box depending on target
-      const isPhoto = cropTargetField === "photo";
-      let cropW = Math.round(cw * (isPhoto ? 0.38 : 0.62));
-      let cropH = Math.round(isPhoto ? cropW * (4 / 3) : cropW * (5 / 8));
-      // ensure it fits
-      if (cropH > ch * 0.9) {
-        cropH = Math.round(ch * 0.9);
-        cropW = Math.round(isPhoto ? cropH * (3 / 4) : cropH * (8 / 5));
-      }
-
-      const cropLeft = Math.round((cw - cropW) / 2);
-      const cropTop = Math.round((ch - cropH) / 2);
-
-      // base scale so image covers crop box
-      const baseScale = Math.max(
-        cropW / img.naturalWidth,
-        cropH / img.naturalHeight,
-      );
-      const imgScale = baseScale;
-      const displayedW = img.naturalWidth * imgScale;
-      const displayedH = img.naturalHeight * imgScale;
-
-      // center image on crop box
-      const imgOffsetX = cropLeft + cropW / 2 - displayedW / 2;
-      const imgOffsetY = cropTop + cropH / 2 - displayedH / 2;
-
-      cropStateRef.current = {
-        dragging: false,
-        startX: 0,
-        startY: 0,
-        imgOffsetX,
-        imgOffsetY,
-        imgScale,
-        baseScale,
-        imgNaturalW: img.naturalWidth,
-        imgNaturalH: img.naturalHeight,
-        cropLeft,
-        cropTop,
-        cropW,
-        cropH,
-      };
-
-      const redraw = () => {
-        const st = cropStateRef.current;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        const dw = st.imgNaturalW * st.imgScale;
-        const dh = st.imgNaturalH * st.imgScale;
-        // draw image
-        ctx.drawImage(img, st.imgOffsetX, st.imgOffsetY, dw, dh);
-
-        // darken only the area outside the crop frame so the image stays visible inside it
-        ctx.fillStyle = "rgba(0,0,0,0.36)";
-        ctx.fillRect(0, 0, canvas.width, st.cropTop);
-        ctx.fillRect(
-          0,
-          st.cropTop + st.cropH,
-          canvas.width,
-          canvas.height - (st.cropTop + st.cropH),
-        );
-        ctx.fillRect(0, st.cropTop, st.cropLeft, st.cropH);
-        ctx.fillRect(
-          st.cropLeft + st.cropW,
-          st.cropTop,
-          canvas.width - (st.cropLeft + st.cropW),
-          st.cropH,
-        );
-
-        // draw a crisp white frame with subtle glow
-        ctx.save();
-        ctx.strokeStyle = "rgba(255,255,255,0.95)";
-        ctx.lineWidth = 4;
-        ctx.shadowColor = "rgba(0,0,0,0.5)";
-        ctx.shadowBlur = 8;
-        ctx.strokeRect(
-          st.cropLeft + 0.5,
-          st.cropTop + 0.5,
-          st.cropW - 1,
-          st.cropH - 1,
-        );
-        ctx.restore();
-
-        // small inner highlight for clarity
-        ctx.save();
-        ctx.globalCompositeOperation = "lighter";
-        ctx.strokeStyle = "rgba(255,255,255,0.06)";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(
-          st.cropLeft + 2,
-          st.cropTop + 2,
-          st.cropW - 4,
-          st.cropH - 4,
-        );
-        ctx.restore();
-      };
-
-      redraw();
-
-      let pointerActive = false;
-      let startOffsetX = 0;
-      let startOffsetY = 0;
-
-      const clampOffsets = () => {
-        const st = cropStateRef.current;
-        const dw = st.imgNaturalW * st.imgScale;
-        const dh = st.imgNaturalH * st.imgScale;
-
-        const minX = st.cropLeft + st.cropW - dw; // image right edge must be >= crop right
-        const maxX = st.cropLeft; // image left edge must be <= crop left
-        const minY = st.cropTop + st.cropH - dh;
-        const maxY = st.cropTop;
-
-        if (dw <= st.cropW) {
-          // center horizontally over crop
-          st.imgOffsetX = st.cropLeft + (st.cropW - dw) / 2;
-        } else {
-          st.imgOffsetX = Math.min(maxX, Math.max(minX, st.imgOffsetX));
-        }
-
-        if (dh <= st.cropH) {
-          st.imgOffsetY = st.cropTop + (st.cropH - dh) / 2;
-        } else {
-          st.imgOffsetY = Math.min(maxY, Math.max(minY, st.imgOffsetY));
-        }
-      };
-
-      const onPointerDown = (ev) => {
-        ev.preventDefault();
-        pointerActive = true;
-        const rect = canvas.getBoundingClientRect();
-        cropStateRef.current.startX = ev.clientX - rect.left;
-        cropStateRef.current.startY = ev.clientY - rect.top;
-        startOffsetX = cropStateRef.current.imgOffsetX;
-        startOffsetY = cropStateRef.current.imgOffsetY;
-      };
-
-      const onPointerMove = (ev) => {
-        if (!pointerActive) return;
-        const rect = canvas.getBoundingClientRect();
-        const curX = ev.clientX - rect.left;
-        const curY = ev.clientY - rect.top;
-        const dx = curX - cropStateRef.current.startX;
-        const dy = curY - cropStateRef.current.startY;
-        cropStateRef.current.imgOffsetX = startOffsetX + dx;
-        cropStateRef.current.imgOffsetY = startOffsetY + dy;
-        clampOffsets();
-        redraw();
-      };
-
-      const onPointerUp = () => {
-        pointerActive = false;
-      };
-
-      canvas.addEventListener("pointerdown", onPointerDown);
-      window.addEventListener("pointermove", onPointerMove);
-      window.addEventListener("pointerup", onPointerUp);
-
-      // expose a redraw for zoom updates
-      cropStateRef.current.redraw = redraw;
-
-      return () => {
-        canvas.removeEventListener("pointerdown", onPointerDown);
-        window.removeEventListener("pointermove", onPointerMove);
-        window.removeEventListener("pointerup", onPointerUp);
-      };
-    };
-    img.src = cropImageSrc;
-  }, [cropModalOpen, cropImageSrc, cropTargetField]);
 
   return (
     <div className="registration-page">
@@ -1078,15 +851,14 @@ export default function UserRegistration() {
                 <button
                   type="button"
                   className="photo-btn primary-btn live-only-btn"
-                  onClick={() =>
-                    cameraOpen
-                      ? captureLivePhoto(aadharCameraMode || "player")
-                      : startLiveCamera()
+                  disabled={
+                    !!activeCameraTarget && activeCameraTarget !== "player"
                   }
+                  onClick={() => startLiveCamera("player")}
                 >
                   <Camera size={18} />
                   <span style={{ marginLeft: 8 }}>
-                    {cameraOpen ? "Capture" : "Take Live Photo"}
+                    {photoPreview ? "Retake Player Photo" : "Take Live Photo"}
                   </span>
                 </button>
                 <div style={{ display: "grid", gap: 8 }}>
@@ -1112,22 +884,18 @@ export default function UserRegistration() {
                         const file = e.target.files?.[0];
                         if (!file) return;
                         const reader = new FileReader();
-                        reader.onload = (ev) =>
-                          openCropModalWithImage(ev.target?.result, "photo");
+                        reader.onload = (ev) => {
+                          const dataUrl = ev.target?.result;
+                          if (!dataUrl) return;
+                          setPhotoPreview(dataUrl);
+                          setForm((prev) => ({ ...prev, photoUrl: dataUrl }));
+                        };
                         reader.readAsDataURL(file);
                       }}
                     />
                   </label>
                 </div>
               </div>
-
-              {cameraOpen && (
-                <div className="camera-box">
-                  <video ref={videoRef} autoPlay muted playsInline />
-                </div>
-              )}
-
-              {renderCropEditor("photo")}
             </div>
 
             {/* AADHAR IMAGES SECTION */}
@@ -1212,7 +980,10 @@ export default function UserRegistration() {
                       type="button"
                       className="photo-btn primary-btn"
                       style={{ fontSize: "0.9rem", padding: "0.6rem" }}
-                      onClick={() => startAadharCamera("front")}
+                      disabled={
+                        !!activeCameraTarget && activeCameraTarget !== "front"
+                      }
+                      onClick={() => startLiveCamera("front")}
                     >
                       <Camera size={16} />{" "}
                       {aadharFrontPreview ? "Retake Front" : "Capture Front"}
@@ -1234,8 +1005,6 @@ export default function UserRegistration() {
                       />
                     </label>
                   </div>
-
-                  {renderCropEditor("aadharFront")}
                 </div>
 
                 {/* AADHAR BACK */}
@@ -1297,7 +1066,10 @@ export default function UserRegistration() {
                       type="button"
                       className="photo-btn primary-btn"
                       style={{ fontSize: "0.9rem", padding: "0.6rem" }}
-                      onClick={() => startAadharCamera("back")}
+                      disabled={
+                        !!activeCameraTarget && activeCameraTarget !== "back"
+                      }
+                      onClick={() => startLiveCamera("back")}
                     >
                       <Camera size={16} />{" "}
                       {aadharBackPreview ? "Retake Back" : "Capture Back"}
@@ -1319,8 +1091,6 @@ export default function UserRegistration() {
                       />
                     </label>
                   </div>
-
-                  {renderCropEditor("aadharBack")}
                 </div>
               </div>
             </div>
@@ -1330,6 +1100,156 @@ export default function UserRegistration() {
               <ChevronRight size={20} />
             </button>
           </form>
+
+          {activeCameraTarget && (
+            <div
+              className="capture-modal-overlay"
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="capture-modal-shell">
+                <div className="capture-modal-topbar">
+                  <div className="capture-brand-wrap">
+                    <img
+                      src={INDOCREONIX_LOGO_URL}
+                      alt="IndoCreonix"
+                      className="capture-brand-logo"
+                    />
+                    <div>
+                      <p className="capture-brand-title">Capture Studio</p>
+                      <p className="capture-brand-sub">
+                        Protected by IndoCreonix
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="capture-modal-content">
+                  <div className="capture-preview-stage">
+                    <video
+                      ref={cameraModalVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      style={modalPreviewStyle}
+                    />
+                    <div className="capture-target-pill">
+                      Now capturing: {getCaptureTargetLabel()}
+                    </div>
+                  </div>
+
+                  <div className="capture-control-panel">
+                    <h3>
+                      <SlidersHorizontal size={18} /> Fine Tune Capture
+                    </h3>
+                    <label className="capture-control-row">
+                      <span>Brightness</span>
+                      <input
+                        type="range"
+                        min="70"
+                        max="130"
+                        value={captureAdjustments.brightness}
+                        onChange={(e) =>
+                          setCaptureAdjustments((current) => ({
+                            ...current,
+                            brightness: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="capture-control-row">
+                      <span>Contrast</span>
+                      <input
+                        type="range"
+                        min="70"
+                        max="130"
+                        value={captureAdjustments.contrast}
+                        onChange={(e) =>
+                          setCaptureAdjustments((current) => ({
+                            ...current,
+                            contrast: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="capture-control-row">
+                      <span>Saturation</span>
+                      <input
+                        type="range"
+                        min="70"
+                        max="130"
+                        value={captureAdjustments.saturate}
+                        onChange={(e) =>
+                          setCaptureAdjustments((current) => ({
+                            ...current,
+                            saturate: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="capture-control-row">
+                      <span>Zoom</span>
+                      <input
+                        type="range"
+                        min="100"
+                        max="180"
+                        value={captureAdjustments.zoom}
+                        onChange={(e) =>
+                          setCaptureAdjustments((current) => ({
+                            ...current,
+                            zoom: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+
+                    <div className="capture-partner-strip">
+                      {PARTNER_LOGOS.map((logo) => (
+                        <img key={logo.alt} src={logo.src} alt={logo.alt} />
+                      ))}
+                    </div>
+
+                    <div className="capture-security-note">
+                      <ShieldCheck size={16} />
+                      Secure preview session. Image is saved only when you click
+                      Apply.
+                    </div>
+
+                    <div className="capture-actions">
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() =>
+                          setCaptureAdjustments({
+                            brightness: 100,
+                            contrast: 100,
+                            saturate: 100,
+                            zoom: 100,
+                          })
+                        }
+                      >
+                        Reset Adjustments
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={stopLiveCamera}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={captureLivePhoto}
+                      >
+                        Apply & Save
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </motion.div>
       </section>
 
@@ -1953,25 +1873,6 @@ export default function UserRegistration() {
 
       }
 
-      `}</style>
-      <style>{`
-      /* Crop modal styles */
-      .crop-modal{
-        position:fixed;
-        inset:0;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        background:rgba(0,0,0,0.6);
-        z-index:1200;
-      }
-      .crop-panel{
-        background:var(--bg, #071028);
-        border-radius:10px;
-        padding:1rem 1.25rem;
-        width:min(920px, 96%);
-        box-shadow:0 12px 40px rgba(0,0,0,0.6);
-      }
       `}</style>
     </div>
   );
