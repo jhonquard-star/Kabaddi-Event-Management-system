@@ -16,8 +16,7 @@ import {
   calculateAgeFromDob,
 } from "../utils/playerValidation";
 import { getActiveEventId } from "../utils/eventSelection";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+import { API_URL } from "../utils/apiBase";
 // Hero background (Cloudinary image provided)
 const HERO_BG_URL =
   "https://res.cloudinary.com/dcqo5qt7b/image/upload/v1767294465/ddka_gallery/yc2i3aphkskozb3sktyl.jpg";

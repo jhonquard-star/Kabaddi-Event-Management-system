@@ -3,8 +3,7 @@ import axios from "axios";
 import { Shuffle, Calendar, Swords, AlertCircle, Play } from "lucide-react";
 import { motion } from "framer-motion";
 import { EVENT_CHANGE_EVENT, getActiveEventId } from "../utils/eventSelection";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+import { API_URL } from "../utils/apiBase";
 
 const MatchManagement = () => {
   const [eventId, setEventId] = useState(getActiveEventId());

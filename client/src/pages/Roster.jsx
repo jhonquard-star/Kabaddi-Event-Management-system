@@ -21,8 +21,7 @@ import {
   buildPlayerPayload,
   validatePlayerIdentity,
 } from "../utils/playerValidation";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+import { API_URL } from "../utils/apiBase";
 
 const Roster = () => {
   const [eventId, setEventId] = useState(getActiveEventId());

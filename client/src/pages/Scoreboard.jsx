@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Trophy, Activity, Radio } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { API_URL } from "../utils/apiBase";
 
 const Scoreboard = () => {
   const [match, setMatch] = useState(null);

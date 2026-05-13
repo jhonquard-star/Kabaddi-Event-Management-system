@@ -1,6 +1,10 @@
 {
     "rewrites": [
         {
+            "source": "/api/(.*)",
+            "destination": "https://event-management-system-4k9h.onrender.com/api/$1"
+        },
+        {
             "source": "/(.*)",
             "destination": "/index.html"
         }

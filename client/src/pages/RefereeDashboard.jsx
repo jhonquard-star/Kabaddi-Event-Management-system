@@ -3,8 +3,7 @@ import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { Play, Pause, AlertTriangle, CheckSquare, Activity, ShieldAlert, UserPlus, UserMinus, Eye } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { API_URL } from "../utils/apiBase";
 
 const RefereeDashboard = () => {
   const { role } = useParams(); // 'chief-referee', 'umpire-1', etc.

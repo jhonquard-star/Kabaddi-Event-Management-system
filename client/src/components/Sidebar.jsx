@@ -19,8 +19,7 @@ import {
   getActiveEventId,
   setActiveEventId,
 } from "../utils/eventSelection";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+import { API_URL } from "../utils/apiBase";
 
 const Sidebar = ({ isMobileOpen = false, onClose = () => {} }) => {
   const [events, setEvents] = useState([]);
