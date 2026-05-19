@@ -5,7 +5,11 @@ import {
   Slash,
   Trophy,
 } from "lucide-react";
-import { EVENT_DISPLAY_TITLE, EVENT_DATES, EVENT_VENUE } from "../data/eventInfo";
+import {
+  EVENT_DISPLAY_TITLE,
+  EVENT_DATES,
+  EVENT_VENUE,
+} from "../data/eventInfo";
 import {
   performanceRows,
   samplePlayersA,
@@ -89,7 +93,9 @@ const OfficialScoreSheet = () => {
           </div>
           <div>
             <span className="eyebrow">Venue / Date</span>
-            <strong>{EVENT_VENUE} · {EVENT_DATES}</strong>
+            <strong>
+              {EVENT_VENUE} · {EVENT_DATES}
+            </strong>
           </div>
           <div>
             <span className="eyebrow">Toss</span>

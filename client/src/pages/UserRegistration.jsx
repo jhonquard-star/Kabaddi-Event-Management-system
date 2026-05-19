@@ -773,9 +773,10 @@ export default function UserRegistration() {
                   type="text"
                   disabled
                   value={
-                      events.find((e) => e.id === form.eventId)?.name ||
-                      EVENT_DISPLAY_TITLE || FIXED_EVENT_NAME
-                    }
+                    events.find((e) => e.id === form.eventId)?.name ||
+                    EVENT_DISPLAY_TITLE ||
+                    FIXED_EVENT_NAME
+                  }
                   placeholder="Event"
                 />
               </div>
