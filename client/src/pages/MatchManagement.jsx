@@ -9,27 +9,60 @@ const MatchManagement = () => {
   const [eventId, setEventId] = useState(getActiveEventId());
   const [teams, setTeams] = useState([]);
   const [fixtures, setFixtures] = useState([]);
-  const [pools, setPools] = useState({ A: [], B: [] });
+  const [pools, setPools] = useState({});
+  const [numPools, setNumPools] = useState(4);
   const [loading, setLoading] = useState(false);
   const visibleTeams = eventId ? teams : [];
 
-  useEffect(() => {
+  const fetchMatchData = async () => {
     if (!eventId) return;
+    try {
+      // 1. Fetch Teams
+      const teamsRes = await axios.get(`${API_URL}/api/matches/teams`, {
+        params: { eventId },
+      });
+      setTeams(teamsRes.data);
 
-    const fetchTeams = async () => {
-      try {
-        const res = await axios.get(`${API_URL}/api/matches/teams`, {
-          params: { eventId },
+      // 2. Fetch Existing Matches
+      const matchesRes = await axios.get(`${API_URL}/api/matches`, {
+        params: { eventId },
+      });
+      setFixtures(matchesRes.data);
+
+      // 3. Reconstruct Pools dynamically from matches
+      const reconstructedPools = {};
+      matchesRes.data.forEach((m) => {
+        if (m.pool) {
+          if (!reconstructedPools[m.pool]) {
+            reconstructedPools[m.pool] = new Set();
+          }
+          if (m.teamAName) reconstructedPools[m.pool].add(m.teamAName);
+          if (m.teamBName) reconstructedPools[m.pool].add(m.teamBName);
+        }
+      });
+
+      const finalPools = {};
+      Object.entries(reconstructedPools).forEach(([poolKey, teamNames]) => {
+        finalPools[poolKey] = Array.from(teamNames).map((name) => {
+          const matchTeam = teamsRes.data.find((t) => t.name === name);
+          return {
+            name,
+            district: matchTeam ? matchTeam.district : "Jharkhand",
+          };
         });
-        setTeams(res.data);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    fetchTeams();
+      });
+      setPools(finalPools);
+    } catch (err) {
+      console.error("Error fetching match data:", err);
+    }
+  };
 
-    const onEventChange = (evt) =>
+  useEffect(() => {
+    fetchMatchData();
+
+    const onEventChange = (evt) => {
       setEventId(evt.detail?.eventId || getActiveEventId());
+    };
     window.addEventListener(EVENT_CHANGE_EVENT, onEventChange);
     return () => window.removeEventListener(EVENT_CHANGE_EVENT, onEventChange);
   }, [eventId]);
@@ -41,20 +74,24 @@ const MatchManagement = () => {
     }
 
     setLoading(true);
-    // Client-side visual generation for Pools
-    const shuffled = [...visibleTeams].sort(() => 0.5 - Math.random());
-    const half = Math.ceil(shuffled.length / 2);
-    const poolA = shuffled.slice(0, half);
-    const poolB = shuffled.slice(half);
-
-    setPools({ A: poolA, B: poolB });
 
     try {
       const res = await axios.post(`${API_URL}/api/matches/generate`, {
         eventId,
         teams: visibleTeams,
+        numPools,
       });
       setFixtures(res.data.fixtures);
+      
+      // Use the dynamically returned pools from the backend!
+      const generatedPools = {};
+      Object.entries(res.data.pools).forEach(([poolKey, poolTeams]) => {
+        generatedPools[poolKey] = poolTeams.map(t => ({
+          name: t.name,
+          district: t.district || "Jharkhand"
+        }));
+      });
+      setPools(generatedPools);
     } catch (err) {
       alert("Error: " + err.message);
     } finally {
@@ -81,19 +118,48 @@ const MatchManagement = () => {
             Advanced algorithmic randomization for fair play fixtures.
           </p>
         </div>
-        <button
-          className="btn btn-primary"
-          onClick={generateRandomPoolsAndFixtures}
-          disabled={loading || !eventId}
-        >
-          {loading ? (
-            "Processing Algorithms..."
-          ) : (
-            <>
-              <Shuffle size={20} /> Generate Pools & Fixtures
-            </>
-          )}
-        </button>
+        
+        <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+            <label style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: "600" }}>
+              Number of Pools
+            </label>
+            <select
+              value={numPools}
+              onChange={(e) => setNumPools(parseInt(e.target.value))}
+              style={{
+                padding: "0.5rem 1rem",
+                background: "rgba(0,0,0,0.5)",
+                border: "1px solid var(--glass-border)",
+                borderRadius: "8px",
+                color: "#fff",
+                fontWeight: "600",
+                outline: "none"
+              }}
+            >
+              {[2, 3, 4, 5, 6, 7, 8].map((n) => (
+                <option key={n} value={n} style={{ background: "#111" }}>
+                  {n} Pools
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            className="btn btn-primary"
+            style={{ alignSelf: "flex-end" }}
+            onClick={generateRandomPoolsAndFixtures}
+            disabled={loading || !eventId}
+          >
+            {loading ? (
+              "Processing Algorithms..."
+            ) : (
+              <>
+                <Shuffle size={20} /> Generate Pools & Fixtures
+              </>
+            )}
+          </button>
+        </div>
       </header>
 
       {visibleTeams.length < 4 && (
@@ -117,84 +183,74 @@ const MatchManagement = () => {
         </div>
       )}
 
-      {pools.A.length > 0 && (
-        <div className="match-pools-grid" style={{ marginBottom: "3rem" }}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="glass-panel"
-            style={{ padding: "2rem" }}
-          >
-            <h3
-              style={{
-                fontSize: "1.5rem",
-                color: "var(--primary)",
-                marginBottom: "1.5rem",
-                borderBottom: "1px solid var(--glass-border)",
-                paddingBottom: "1rem",
-              }}
+      {Object.keys(pools).length > 0 && (
+        <div 
+          className="match-pools-grid" 
+          style={{ 
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gap: "1.5rem",
+            marginBottom: "3rem" 
+          }}
+        >
+          {Object.entries(pools).map(([poolKey, poolTeams], poolIndex) => (
+            <motion.div
+              key={poolKey}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: poolIndex * 0.05 }}
+              className="glass-panel"
+              style={{ padding: "1.5rem", position: "relative", overflow: "hidden" }}
             >
-              POOL A
-            </h3>
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
-              {pools.A.map((t, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    padding: "1rem",
-                    background: "rgba(0,0,0,0.3)",
-                    borderRadius: "8px",
-                  }}
-                >
-                  <span style={{ fontWeight: 600 }}>{t.name}</span>
-                  <span className="badge badge-secondary">{t.district}</span>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="glass-panel"
-            style={{ padding: "2rem" }}
-          >
-            <h3
-              style={{
-                fontSize: "1.5rem",
-                color: "var(--secondary)",
-                marginBottom: "1.5rem",
-                borderBottom: "1px solid var(--glass-border)",
-                paddingBottom: "1rem",
-              }}
-            >
-              POOL B
-            </h3>
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
-              {pools.B.map((t, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    padding: "1rem",
-                    background: "rgba(0,0,0,0.3)",
-                    borderRadius: "8px",
-                  }}
-                >
-                  <span style={{ fontWeight: 600 }}>{t.name}</span>
-                  <span className="badge badge-primary">{t.district}</span>
-                </div>
-              ))}
-            </div>
-          </motion.div>
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "3px",
+                  background: `linear-gradient(90deg, var(--primary), var(--secondary))`
+                }}
+              ></div>
+              <h3
+                style={{
+                  fontSize: "1.3rem",
+                  color: "var(--primary)",
+                  marginBottom: "1rem",
+                  borderBottom: "1px solid var(--glass-border)",
+                  paddingBottom: "0.5rem",
+                  fontWeight: "bold",
+                  display: "flex",
+                  justifyContent: "space-between"
+                }}
+              >
+                <span>POOL {poolKey}</span>
+                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: "normal" }}>
+                  {poolTeams.length} Teams
+                </span>
+              </h3>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+              >
+                {poolTeams.map((t, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      padding: "0.75rem 1rem",
+                      background: "rgba(0,0,0,0.3)",
+                      borderRadius: "8px",
+                      border: "1px solid rgba(255,255,255,0.02)"
+                    }}
+                  >
+                    <span style={{ fontWeight: 600 }}>{t.name}</span>
+                    <span className="badge badge-secondary">{t.district}</span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          ))}
         </div>
       )}
 
@@ -250,7 +306,10 @@ const MatchManagement = () => {
                     marginBottom: "1.5rem",
                   }}
                 >
-                  <span className="badge badge-primary">Match {i + 1}</span>
+                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                    <span className="badge badge-primary">Match {i + 1}</span>
+                    {f.pool && <span className="badge badge-secondary">Pool {f.pool}</span>}
+                  </div>
                   <span
                     style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}
                   >

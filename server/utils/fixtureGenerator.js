@@ -1,16 +1,23 @@
 /**
  * Generates round-robin fixtures for a set of teams divided into pools.
  * @param {Array} teams - Array of team objects
+ * @param {number} numPools - Number of pools to divide teams into
  * @returns {Object} { pools, fixtures }
  */
-const generateFixtures = (teams) => {
+const generateFixtures = (teams, numPools = 4) => {
     // Shuffle teams
     const shuffled = [...teams].sort(() => 0.5 - Math.random());
-    const pools = { 'A': [], 'B': [], 'C': [], 'D': [] };
+    const pools = {};
     
-    // Distribute into 4 pools
+    // Initialize pools (A, B, C, D, etc.)
+    for (let i = 0; i < numPools; i++) {
+        const poolKey = String.fromCharCode(65 + i);
+        pools[poolKey] = [];
+    }
+    
+    // Distribute into pools
     shuffled.forEach((team, index) => {
-        const poolKey = String.fromCharCode(65 + (index % 4)); 
+        const poolKey = String.fromCharCode(65 + (index % numPools)); 
         pools[poolKey].push(team);
     });
 

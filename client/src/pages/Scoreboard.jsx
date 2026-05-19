@@ -6,19 +6,128 @@ import { API_URL } from "../utils/apiBase";
 const Scoreboard = () => {
   const [match, setMatch] = useState(null);
 
+  const getLocalStorageTimer = () => {
+    const active = localStorage.getItem("kabaddi_timer_active") === "true";
+    const lastStarted = localStorage.getItem("kabaddi_timer_last_started_at");
+    const atStart = localStorage.getItem("kabaddi_timer_at_start");
+    const paused = localStorage.getItem("kabaddi_timer");
+
+    const scores = {};
+    const scoreA = localStorage.getItem("kabaddi_local_scoreA");
+    const scoreB = localStorage.getItem("kabaddi_local_scoreB");
+    if (scoreA !== null) scores.scoreA = parseInt(scoreA);
+    if (scoreB !== null) scores.scoreB = parseInt(scoreB);
+
+    if (active && lastStarted) {
+      const elapsed = Math.floor((Date.now() - parseInt(lastStarted)) / 1000);
+      const computed = Math.max(0, (parseInt(atStart) || 1200) - elapsed);
+      return {
+        timerActive: true,
+        timerLastStartedAt: parseInt(lastStarted),
+        timerAtStart: parseInt(atStart) || 1200,
+        timer: computed,
+        ...scores
+      };
+    } else if (paused !== null) {
+      return {
+        timerActive: false,
+        timer: parseInt(paused),
+        ...scores
+      };
+    }
+    return Object.keys(scores).length > 0 ? scores : null;
+  };
+
   useEffect(() => {
+    const handleStorageChange = () => {
+      const local = getLocalStorageTimer();
+      if (local && match) {
+        setMatch(prev => prev ? { ...prev, ...local } : null);
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [match?.id]);
+
+  useEffect(() => {
+    let fetchInterval;
+
     const fetchMatch = async () => {
       try {
         const res = await axios.get(`${API_URL}/api/matches/live`);
-        setMatch(res.data);
+        setMatch(prev => {
+          let updatedData = { ...res.data };
+
+          // Reconcile Score A local overrides to avoid background API overwriting newer values (stutter)
+          const localScoreA = localStorage.getItem("kabaddi_local_scoreA");
+          if (localScoreA !== null) {
+            const valA = parseInt(localScoreA);
+            if (updatedData.scoreA < valA) {
+              updatedData.scoreA = valA;
+            } else {
+              localStorage.removeItem("kabaddi_local_scoreA");
+            }
+          }
+
+          // Reconcile Score B local overrides to avoid background API overwriting newer values (stutter)
+          const localScoreB = localStorage.getItem("kabaddi_local_scoreB");
+          if (localScoreB !== null) {
+            const valB = parseInt(localScoreB);
+            if (updatedData.scoreB < valB) {
+              updatedData.scoreB = valB;
+            } else {
+              localStorage.removeItem("kabaddi_local_scoreB");
+            }
+          }
+
+          const local = getLocalStorageTimer();
+          
+          if (local) {
+            updatedData = { ...updatedData, ...local };
+          } else if (updatedData.timerActive && updatedData.timerLastStartedAt) {
+             const timerAtStart = updatedData.timerAtStart !== undefined ? updatedData.timerAtStart : (updatedData.timer !== undefined ? updatedData.timer : 1200);
+             const elapsed = Math.floor((Date.now() - updatedData.timerLastStartedAt) / 1000);
+             updatedData.timer = Math.max(0, timerAtStart - elapsed);
+          }
+
+          // If we have a previous match and it's active, don't overwrite the timer with an older value 
+          if (prev && prev.id === updatedData.id && updatedData.timerActive) {
+             return { ...updatedData, timer: prev.timer };
+          }
+          return updatedData;
+        });
       } catch {
         setMatch(null);
       }
     };
+    
     fetchMatch();
-    const interval = setInterval(fetchMatch, 2000);
-    return () => clearInterval(interval);
+    fetchInterval = setInterval(fetchMatch, 3000); // Poll backend every 3 seconds
+    
+    return () => clearInterval(fetchInterval);
   }, []);
+
+  // Visual smooth ticker (immune to browser throttling)
+  useEffect(() => {
+    let tickInterval = null;
+    if (match?.timerActive && match?.timerLastStartedAt) {
+      tickInterval = setInterval(() => {
+        setMatch(prev => {
+          if (!prev) return prev;
+          const timerAtStart = prev.timerAtStart !== undefined ? prev.timerAtStart : (prev.timer !== undefined ? prev.timer : 1200);
+          const elapsed = Math.floor((Date.now() - prev.timerLastStartedAt) / 1000);
+          const computedTimer = Math.max(0, timerAtStart - elapsed);
+          
+          if (computedTimer === 0 && prev.timer !== 0) {
+             return { ...prev, timer: 0, timerActive: false };
+          }
+          return { ...prev, timer: computedTimer };
+        });
+      }, 500); // 500ms for smooth updates
+    }
+    return () => clearInterval(tickInterval);
+  }, [match?.timerActive, match?.timerLastStartedAt]);
 
   if (!match)
     return (
@@ -125,10 +234,10 @@ const Scoreboard = () => {
               className="timer-value"
               style={{ fontSize: "4rem", textShadow: "0 0 30px var(--accent)" }}
             >
-              {Math.floor(match.timer / 60)
+              {Math.floor((match.timer !== undefined ? match.timer : 1200) / 60)
                 .toString()
                 .padStart(2, "0")}
-              :{(match.timer % 60).toString().padStart(2, "0")}
+              :{((match.timer !== undefined ? match.timer : 1200) % 60).toString().padStart(2, "0")}
             </div>
           </div>
 

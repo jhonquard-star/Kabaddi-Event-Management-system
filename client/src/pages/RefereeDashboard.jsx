@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
 import {
@@ -19,27 +19,169 @@ const RefereeDashboard = () => {
   const { role } = useParams(); // 'chief-referee', 'umpire-1', etc.
   const [match, setMatch] = useState(null);
   const [timerActive, setTimerActive] = useState(false);
+  const timerActiveRef = useRef(false);
+
+  // Sync ref with state
+  useEffect(() => {
+    timerActiveRef.current = timerActive;
+  }, [timerActive]);
+
+  // Helper to read current timer and score overrides from localStorage
+  const getLocalStorageTimer = () => {
+    const active = localStorage.getItem("kabaddi_timer_active") === "true";
+    const lastStarted = localStorage.getItem("kabaddi_timer_last_started_at");
+    const atStart = localStorage.getItem("kabaddi_timer_at_start");
+    const paused = localStorage.getItem("kabaddi_timer");
+
+    const scores = {};
+    const scoreA = localStorage.getItem("kabaddi_local_scoreA");
+    const scoreB = localStorage.getItem("kabaddi_local_scoreB");
+    if (scoreA !== null) scores.scoreA = parseInt(scoreA);
+    if (scoreB !== null) scores.scoreB = parseInt(scoreB);
+
+    if (active && lastStarted) {
+      const elapsed = Math.floor((Date.now() - parseInt(lastStarted)) / 1000);
+      const computed = Math.max(0, (parseInt(atStart) || 1200) - elapsed);
+      return {
+        timerActive: true,
+        timerLastStartedAt: parseInt(lastStarted),
+        timerAtStart: parseInt(atStart) || 1200,
+        timer: computed,
+        ...scores
+      };
+    } else if (paused !== null) {
+      return {
+        timerActive: false,
+        timer: parseInt(paused),
+        ...scores
+      };
+    }
+    return Object.keys(scores).length > 0 ? scores : null;
+  };
+
+  // Synchronize state with localStorage on mount & via listener
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const local = getLocalStorageTimer();
+      if (local && match) {
+        if (local.timerActive !== undefined) setTimerActive(local.timerActive);
+        setMatch(prev => prev ? { ...prev, ...local } : null);
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    // Initial sync
+    const local = getLocalStorageTimer();
+    if (local && local.timerActive !== undefined) {
+      setTimerActive(local.timerActive);
+    }
+
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [match?.id]);
 
   useEffect(() => {
     const fetchMatch = async () => {
       try {
         const res = await axios.get(`${API_URL}/api/matches/live`);
-        setMatch(res.data);
+        setMatch(prev => {
+          let updatedData = { ...res.data };
+          
+          // Reconcile Score A local overrides to avoid background API overwriting newer values (stutter)
+          const localScoreA = localStorage.getItem("kabaddi_local_scoreA");
+          if (localScoreA !== null) {
+            const valA = parseInt(localScoreA);
+            if (updatedData.scoreA < valA) {
+              updatedData.scoreA = valA;
+            } else {
+              localStorage.removeItem("kabaddi_local_scoreA");
+            }
+          }
+
+          // Reconcile Score B local overrides to avoid background API overwriting newer values (stutter)
+          const localScoreB = localStorage.getItem("kabaddi_local_scoreB");
+          if (localScoreB !== null) {
+            const valB = parseInt(localScoreB);
+            if (updatedData.scoreB < valB) {
+              updatedData.scoreB = valB;
+            } else {
+              localStorage.removeItem("kabaddi_local_scoreB");
+            }
+          }
+
+          const local = getLocalStorageTimer();
+          
+          // Prioritize high-performance local storage timer over background DB fetch
+          if (local) {
+            updatedData = { ...updatedData, ...local };
+          } else if (updatedData.timerActive && updatedData.timerLastStartedAt) {
+             const timerAtStart = updatedData.timerAtStart !== undefined ? updatedData.timerAtStart : (updatedData.timer !== undefined ? updatedData.timer : 1200);
+             const elapsed = Math.floor((Date.now() - updatedData.timerLastStartedAt) / 1000);
+             updatedData.timer = Math.max(0, timerAtStart - elapsed);
+          }
+
+          if (!prev) {
+            setTimerActive(updatedData.timerActive || false);
+            return updatedData;
+          }
+          // Set timer active state from backend so all roles know it's running
+          if (updatedData.timerActive !== undefined) {
+             setTimerActive(updatedData.timerActive);
+          }
+          // Avoid stuttering the clock if we are visually ticking it locally
+          return {
+            ...updatedData,
+            timer: timerActiveRef.current ? prev.timer : updatedData.timer
+          };
+        });
       } catch {
         setMatch(null);
       }
     };
     fetchMatch();
-    const interval = setInterval(fetchMatch, 3000);
+    const fetchInterval = setInterval(fetchMatch, 3000);
+    return () => clearInterval(fetchInterval);
+  }, [role]);
+
+  // Visual Ticker based on timestamps (immune to browser throttling)
+  useEffect(() => {
+    let interval = null;
+    if (timerActive && match?.timerLastStartedAt) {
+      interval = setInterval(() => {
+        setMatch(prev => {
+          if (!prev) return prev;
+          
+          const timerAtStart = prev.timerAtStart !== undefined ? prev.timerAtStart : (prev.timer !== undefined ? prev.timer : 1200);
+          const elapsed = Math.floor((Date.now() - prev.timerLastStartedAt) / 1000);
+          const computedTimer = Math.max(0, timerAtStart - elapsed);
+          
+          if (computedTimer === 0 && prev.timer !== 0) {
+            // Auto stop at 0. Only chief referee officially patches it to close it out.
+            if (role === "chief-referee") {
+              localStorage.setItem("kabaddi_timer_active", "false");
+              localStorage.setItem("kabaddi_timer", "0");
+              axios.patch(`${API_URL}/api/matches/${prev.id}`, { timer: 0, timerActive: false }).catch(() => {});
+            }
+            setTimerActive(false);
+            return { ...prev, timer: 0, timerActive: false };
+          }
+          
+          return { ...prev, timer: computedTimer };
+        });
+      }, 500); // 500ms for smooth updates
+    }
     return () => clearInterval(interval);
-  }, []);
+  }, [timerActive, role, match?.timerLastStartedAt]);
 
   const updateScore = async (team, points, type) => {
     if (!match) return;
     const field = team === "A" ? "scoreA" : "scoreB";
     const newScore = (match[field] || 0) + points;
+    
+    // Save to localStorage immediately to avoid lag/stutter
+    localStorage.setItem(`kabaddi_local_${field}`, newScore.toString());
+    
     const event = {
-      time: match.timer,
+      time: match.timer !== undefined ? match.timer : 1200,
       type,
       team,
       points,
@@ -66,7 +208,7 @@ const RefereeDashboard = () => {
   const sendAlert = async (type) => {
     if (!match) return;
     const event = {
-      time: match.timer,
+      time: match.timer !== undefined ? match.timer : 1200,
       type,
       team: "System",
       points: 0,
@@ -161,15 +303,62 @@ const RefereeDashboard = () => {
                 <button
                   className={`btn ${timerActive ? "btn-danger" : "btn-primary"}`}
                   style={{ marginTop: "0.5rem", padding: "0.5rem 2rem" }}
-                  onClick={() => setTimerActive(!timerActive)}
+                  onClick={async () => {
+                    const nextState = !timerActive;
+                    setTimerActive(nextState);
+                    
+                    if (match?.id) {
+                      if (nextState) {
+                        // Starting the clock
+                        const timerAtStart = match.timer !== undefined ? match.timer : 1200;
+                        const now = Date.now();
+                        
+                        // Ultra-low latency LocalStorage write
+                        localStorage.setItem("kabaddi_timer_active", "true");
+                        localStorage.setItem("kabaddi_timer_last_started_at", now.toString());
+                        localStorage.setItem("kabaddi_timer_at_start", timerAtStart.toString());
+                        
+                        setMatch(prev => ({
+                          ...prev, 
+                          timerActive: true, 
+                          timerLastStartedAt: now, 
+                          timerAtStart 
+                        }));
+                        
+                        axios.patch(`${API_URL}/api/matches/${match.id}`, { 
+                          timerActive: true,
+                          timerLastStartedAt: now,
+                          timerAtStart
+                        }).catch(console.error);
+                      } else {
+                        // Pausing the clock
+                        const currentTimer = match.timer !== undefined ? match.timer : 1200;
+                        
+                        // Ultra-low latency LocalStorage write
+                        localStorage.setItem("kabaddi_timer_active", "false");
+                        localStorage.setItem("kabaddi_timer", currentTimer.toString());
+                        
+                        setMatch(prev => ({
+                          ...prev,
+                          timerActive: false,
+                          timer: currentTimer
+                        }));
+                        
+                        axios.patch(`${API_URL}/api/matches/${match.id}`, {
+                          timerActive: false,
+                          timer: currentTimer
+                        }).catch(console.error);
+                      }
+                    }
+                  }}
                 >
                   {timerActive ? (
                     <>
-                      <Pause size={18} /> STOP CLOCK
+                      <Pause size={18} /> PAUSE CLOCK
                     </>
                   ) : (
                     <>
-                      <Play size={18} /> START CLOCK
+                      <Play size={18} /> START MATCH CLOCK
                     </>
                   )}
                 </button>

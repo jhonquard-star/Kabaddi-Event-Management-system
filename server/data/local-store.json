@@ -7,8 +7,18 @@
       "district": "Dhanbad",
       "startDate": "2026-05-13",
       "endDate": "2026-05-15",
-      "isActive": true,
+      "isActive": false,
       "createdAt": "2026-05-12T15:32:02.985Z"
+    },
+    {
+      "id": "id_1779208645813_slh72ai",
+      "name": "13वीं ★= झारखण्ड राज्य सीनियर महिला / पुरुष कबड्डी प्रतियोगिता 2026",
+      "state": "Jharkhand",
+      "district": "Dhanbad",
+      "startDate": "2026-06-05",
+      "endDate": "2026-06-07",
+      "isActive": true,
+      "createdAt": "2026-05-19T16:37:25.431Z"
     }
   ],
   "teams": [
@@ -20,6 +30,222 @@
       "coach": "Pappu Kumar Yadav",
       "eventId": "id_1778599923344_i6vdbet",
       "createdAt": "2026-05-13T22:13:08.478Z"
+    },
+    {
+      "id": "id_1779208646268_ciotufe",
+      "name": "Bokaro Team",
+      "state": "Jharkhand",
+      "district": "Bokaro",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:25.879Z"
+    },
+    {
+      "id": "id_1779208646678_5scxg2s",
+      "name": "Chatra Team",
+      "state": "Jharkhand",
+      "district": "Chatra",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:26.322Z"
+    },
+    {
+      "id": "id_1779208647085_qxjrhen",
+      "name": "Deoghar Team",
+      "state": "Jharkhand",
+      "district": "Deoghar",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:26.734Z"
+    },
+    {
+      "id": "id_1779208647245_ngcjobu",
+      "name": "Dhanbad Team",
+      "state": "Jharkhand",
+      "district": "Dhanbad",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:27.159Z"
+    },
+    {
+      "id": "id_1779208647390_296zlj7",
+      "name": "Dumka Team",
+      "state": "Jharkhand",
+      "district": "Dumka",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:27.309Z"
+    },
+    {
+      "id": "id_1779208647867_8aq0i51",
+      "name": "Garhwa Team",
+      "state": "Jharkhand",
+      "district": "Garhwa",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:27.450Z"
+    },
+    {
+      "id": "id_1779208648432_3xpng0f",
+      "name": "Giridih Team",
+      "state": "Jharkhand",
+      "district": "Giridih",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:28.336Z"
+    },
+    {
+      "id": "id_1779208648569_5ei25hx",
+      "name": "Godda Team",
+      "state": "Jharkhand",
+      "district": "Godda",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:28.497Z"
+    },
+    {
+      "id": "id_1779208648687_0nm93wa",
+      "name": "Gumla Team",
+      "state": "Jharkhand",
+      "district": "Gumla",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:28.624Z"
+    },
+    {
+      "id": "id_1779208648820_63gledg",
+      "name": "Hazaribagh Team",
+      "state": "Jharkhand",
+      "district": "Hazaribagh",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:28.762Z"
+    },
+    {
+      "id": "id_1779208648953_8t68xvy",
+      "name": "Jamtara Team",
+      "state": "Jharkhand",
+      "district": "Jamtara",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:28.889Z"
+    },
+    {
+      "id": "id_1779208649078_wejrodv",
+      "name": "Khunti Team",
+      "state": "Jharkhand",
+      "district": "Khunti",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:29.010Z"
+    },
+    {
+      "id": "id_1779208649220_2fpfgw6",
+      "name": "Koderma Team",
+      "state": "Jharkhand",
+      "district": "Koderma",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:29.141Z"
+    },
+    {
+      "id": "id_1779208649347_z01oe9c",
+      "name": "Latehar Team",
+      "state": "Jharkhand",
+      "district": "Latehar",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:29.274Z"
+    },
+    {
+      "id": "id_1779208649496_sjpstz0",
+      "name": "Lohardaga Team",
+      "state": "Jharkhand",
+      "district": "Lohardaga",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:29.420Z"
+    },
+    {
+      "id": "id_1779208649613_8b3eqvq",
+      "name": "Pakur Team",
+      "state": "Jharkhand",
+      "district": "Pakur",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:29.557Z"
+    },
+    {
+      "id": "id_1779208649748_7aymy1m",
+      "name": "Palamu Team",
+      "state": "Jharkhand",
+      "district": "Palamu",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:29.667Z"
+    },
+    {
+      "id": "id_1779208649917_hav54xc",
+      "name": "Ramgarh Team",
+      "state": "Jharkhand",
+      "district": "Ramgarh",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:29.846Z"
+    },
+    {
+      "id": "id_1779208650039_ew60bkz",
+      "name": "Ranchi Team",
+      "state": "Jharkhand",
+      "district": "Ranchi",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:29.977Z"
+    },
+    {
+      "id": "id_1779208650170_5qv1r5u",
+      "name": "Sahibganj Team",
+      "state": "Jharkhand",
+      "district": "Sahibganj",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:30.096Z"
+    },
+    {
+      "id": "id_1779208650322_0xxpxh2",
+      "name": "Seraikela-Kharsawan Team",
+      "state": "Jharkhand",
+      "district": "Seraikela-Kharsawan",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:30.235Z"
+    },
+    {
+      "id": "id_1779208650454_3fvzapp",
+      "name": "Simdega Team",
+      "state": "Jharkhand",
+      "district": "Simdega",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:30.391Z"
+    },
+    {
+      "id": "id_1779208650603_yjf2ia8",
+      "name": "West Singhbhum Team",
+      "state": "Jharkhand",
+      "district": "West Singhbhum",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:30.516Z"
+    },
+    {
+      "id": "id_1779208650756_p6ee81t",
+      "name": "East Singhbhum Team",
+      "state": "Jharkhand",
+      "district": "East Singhbhum",
+      "coach": "TBD",
+      "eventId": "id_1779208645813_slh72ai",
+      "createdAt": "2026-05-19T16:37:30.670Z"
     }
   ],
   "players": [
@@ -43,6 +269,27 @@
       "photoPublicId": "",
       "eventId": "id_1778599923344_i6vdbet",
       "createdAt": "2026-05-13T22:15:11.111Z"
+    },
+    {
+      "id": "id_1779209047774_luxf3ee",
+      "name": "Praveen",
+      "fatherName": "hjbbbbbbbbbbbbbbb",
+      "email": "praveen.pr105@gmail.com",
+      "phone": "0000000000",
+      "age": 23,
+      "weight": 85,
+      "position": "Raider",
+      "teamId": "id_1778710389165_mmn7nx5",
+      "district": "Gumla",
+      "state": "Jharkhand",
+      "dob": "2003-01-12",
+      "aadhar": "000000000000",
+      "aadharFrontUrl": "https://res.cloudinary.com/ddwjjhpsx/image/upload/v1779209045/kabaddi_players/kxljskqugxt601fn6q93.jpg",
+      "aadharBackUrl": "https://res.cloudinary.com/ddwjjhpsx/image/upload/v1779209045/kabaddi_players/olnjothm4vdvfpoijfq7.jpg",
+      "photoUrl": "https://res.cloudinary.com/ddwjjhpsx/image/upload/v1779209045/kabaddi_players/elgndfjnc1fk4xitqpaz.jpg",
+      "photoPublicId": "",
+      "eventId": "id_1778599923344_i6vdbet",
+      "createdAt": "2026-05-19T16:44:07.123Z"
     }
   ],
   "matches": []

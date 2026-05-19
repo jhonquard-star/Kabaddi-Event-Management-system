@@ -740,34 +740,72 @@ export default function UserRegistration() {
           </div>
 
           <motion.h3
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.6 }}
             className="subtitle"
+            style={{
+              textTransform: "uppercase",
+              letterSpacing: "2px",
+              color: "#FFD700",
+              fontWeight: "600",
+              textShadow: "0 2px 10px rgba(0,0,0,0.5)"
+            }}
           >
-            DHANBAD DISTRICT KABADDI ASSOCIATION
+            आयोजक: धनबाद जिला कबड्डी संघ एवं झारखण्ड राज्य कबड्डी संघ
           </motion.h3>
 
           <motion.h1
-            initial={{ scale: 0.8 }}
-            animate={{ scale: 1 }}
-            transition={{ duration: 0.7 }}
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.8, type: "spring", bounce: 0.4 }}
             className="main-title"
+            style={{ 
+              fontSize: "3.5rem", 
+              lineHeight: "1.3", 
+              margin: "1.5rem 0",
+              textShadow: "0 4px 20px rgba(0,0,0,0.4)"
+            }}
           >
-            SENIOR STATE
+            <span style={{ 
+              display: "inline-block",
+              background: "linear-gradient(135deg, #FFD700 0%, #FF8C00 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              marginBottom: "0.5rem",
+              fontWeight: "900"
+            }}>13वीं झारखण्ड राज्य</span>
             <br />
-            KABADDI CHAMPIONSHIP
+            <span style={{ fontWeight: "800", color: "#FFFFFF" }}>
+              सीनियर महिला एवं पुरुष कबड्डी प्रतियोगिता 2026
+            </span>
           </motion.h1>
 
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5, duration: 0.6 }}
             className="hero-text"
+            style={{
+              background: "rgba(255, 255, 255, 0.05)",
+              backdropFilter: "blur(12px)",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
+              padding: "1.5rem 2.5rem",
+              borderRadius: "16px",
+              display: "inline-block",
+              marginTop: "0.5rem",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.3)"
+            }}
           >
-            Hosted by Dhanbad District Kabaddi Association under Jharkhand State
-            Kabaddi Association.
-          </motion.p>
+            <p style={{ margin: "0 0 0.8rem 0", fontSize: "1.15rem", color: "#F8FAFC", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+              <span style={{ color: "#FFD700", fontWeight: "700" }}>आयोजन स्थल:</span> 
+              डॉ. जे. के. सिन्हा मेमोरियल इंटरनेशनल स्कूल ऑफ लर्निंग, धनबाद
+            </p>
+            <p style={{ margin: 0, fontSize: "1.15rem", color: "#F8FAFC", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+              <span style={{ color: "#FFD700", fontWeight: "700" }}>तिथि:</span> 
+              5 जून - 7 जून 2026
+            </p>
+          </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}

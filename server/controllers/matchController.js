@@ -924,6 +924,8 @@ const generateFixtures = async (req, res) => {
       .json({ error: "At least 2 teams are required to generate fixtures." });
   }
 
+  const numPools = parseInt(req.body.numPools) || 4;
+
   try {
     if (!db) throw new Error("Firestore Database not initialized.");
     if (!Array.isArray(req.body.teams) || !req.body.teams.length) {
@@ -933,7 +935,7 @@ const generateFixtures = async (req, res) => {
         .get();
       inputTeams = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     }
-    const { fixtures } = genFix(inputTeams);
+    const { pools, fixtures } = genFix(inputTeams, numPools);
     const batch = db.batch();
     fixtures.forEach((fixture) => {
       const ref = db.collection("matches").doc(fixture.id);
@@ -945,13 +947,13 @@ const generateFixtures = async (req, res) => {
     });
     await batch.commit();
     await invalidateDataCaches(eventId);
-    res.json({ fixtures });
+    res.json({ pools, fixtures });
   } catch (error) {
     console.error(
       "Firestore Error in generateFixtures, using memory fallback:",
       error.message,
     );
-    const { fixtures } = genFix(inputTeams);
+    const { pools, fixtures } = genFix(inputTeams, numPools);
     const payload = fixtures.map((fixture) => ({
       ...fixture,
       eventId,
@@ -962,7 +964,7 @@ const generateFixtures = async (req, res) => {
       return store;
     });
     await invalidateDataCaches(eventId);
-    res.json({ fixtures: payload });
+    res.json({ pools, fixtures: payload });
   }
 };
 
