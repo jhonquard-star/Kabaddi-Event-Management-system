@@ -120,6 +120,7 @@ export default function UserRegistration() {
     savedRegistrationState.aadharBackPreview,
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPopulatingTeams, setIsPopulatingTeams] = useState(false);
   const [activeCameraTarget, setActiveCameraTarget] = useState(null);
   const [captureAdjustments, setCaptureAdjustments] = useState({
     brightness: 100,
@@ -263,6 +264,45 @@ export default function UserRegistration() {
 
     loadTeams();
   }, [form.eventId]);
+
+  const createDefaultDistrictTeams = async (eventId) => {
+    if (!eventId) return [];
+    setIsPopulatingTeams(true);
+    try {
+      const payloads = JH_DISTRICTS.map((district) => ({
+        name: `${district} Team`,
+        state: "Jharkhand",
+        district,
+        coach: "TBD",
+        eventId,
+      }));
+
+      // Create teams sequentially to avoid overwhelming the backend
+      for (const p of payloads) {
+        try {
+          await axios.post(`${API_URL}/api/matches/teams`, p);
+        } catch (e) {
+          // continue on individual errors
+          console.warn("Failed to create team", p.district, e?.message || e);
+        }
+      }
+
+      const response = await axios.get(`${API_URL}/api/matches/teams`, {
+        params: { eventId },
+      });
+      const list = Array.isArray(response.data) ? response.data : [];
+      setTeams(list);
+      return list;
+    } catch (error) {
+      console.error("Failed to populate teams", error);
+      alert(
+        "Failed to create default teams. Please try again or contact the organizer.",
+      );
+      return [];
+    } finally {
+      setIsPopulatingTeams(false);
+    }
+  };
 
   useEffect(() => {
     if (!cameraStreamRef.current || !activeCameraTarget) {
@@ -549,6 +589,34 @@ export default function UserRegistration() {
 
         return teamStateMatches && teamDistrictMatches;
       }) || teams[0];
+
+    // If there are no teams for the event, attempt to populate default
+    if ((!teams || teams.length === 0) && resolvedEventId) {
+      const created = await createDefaultDistrictTeams(resolvedEventId);
+      if (!created || !created.length) {
+        setIsSubmitting(false);
+        return;
+      }
+
+      // re-evaluate matchingTeam after creation
+      const refreshed =
+        created.find((team) => {
+          const teamStateMatches =
+            !form.state ||
+            (team.state || "").trim().toLowerCase() ===
+              (form.state || "").trim().toLowerCase();
+          const teamDistrictMatches =
+            !form.district ||
+            (team.district || "").trim().toLowerCase() ===
+              (form.district || "").trim().toLowerCase();
+
+          return teamStateMatches && teamDistrictMatches;
+        }) || created[0];
+
+      if (refreshed?.id) {
+        setForm((prev) => ({ ...prev, teamId: refreshed.id }));
+      }
+    }
 
     if (!matchingTeam?.id) {
       return alert(
