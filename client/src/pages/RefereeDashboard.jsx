@@ -22,6 +22,8 @@ import {
   setActiveMatchId,
 } from "../utils/eventSelection";
 
+const MATCH_HALF_DURATION = 1200;
+
 const RefereeDashboard = () => {
   const { role } = useParams(); // 'chief-referee', 'umpire-1', etc.
   const [match, setMatch] = useState(null);
@@ -49,6 +51,7 @@ const RefereeDashboard = () => {
     );
     const atStart = localStorage.getItem(`kabaddi_timer_at_start_${matchId}`);
     const paused = localStorage.getItem(`kabaddi_timer_${matchId}`);
+    const half = localStorage.getItem(`kabaddi_match_half_${matchId}`);
 
     const scores = {};
     const scoreA = localStorage.getItem(`kabaddi_local_scoreA_${matchId}`);
@@ -62,14 +65,16 @@ const RefereeDashboard = () => {
       return {
         timerActive: true,
         timerLastStartedAt: parseInt(lastStarted),
-        timerAtStart: parseInt(atStart) || 1200,
+        timerAtStart: parseInt(atStart) || MATCH_HALF_DURATION,
         timer: computed,
+        half: half ? parseInt(half) : undefined,
         ...scores,
       };
     } else if (paused !== null) {
       return {
         timerActive: false,
         timer: parseInt(paused),
+        half: half ? parseInt(half) : undefined,
         ...scores,
       };
     }
@@ -257,26 +262,71 @@ const RefereeDashboard = () => {
               ? prev.timerAtStart
               : prev.timer !== undefined
                 ? prev.timer
-                : 1200;
+                : MATCH_HALF_DURATION;
           const elapsed = Math.floor(
             (Date.now() - prev.timerLastStartedAt) / 1000,
           );
           const computedTimer = Math.max(0, timerAtStart - elapsed);
 
           if (computedTimer === 0 && prev.timer !== 0) {
-            // Auto stop at 0. Only chief referee officially patches it to close it out.
-            if (role === "chief-referee") {
-              localStorage.setItem(`kabaddi_timer_active_${prev.id}`, "false");
-              localStorage.setItem(`kabaddi_timer_${prev.id}`, "0");
+            const currentHalf = Number(prev.half || 1);
+            if (currentHalf === 1) {
+              const now = Date.now();
+              localStorage.setItem(`kabaddi_timer_active_${prev.id}`, "true");
+              localStorage.setItem(
+                `kabaddi_timer_${prev.id}`,
+                MATCH_HALF_DURATION.toString(),
+              );
+              localStorage.setItem(
+                `kabaddi_timer_last_started_at_${prev.id}`,
+                now.toString(),
+              );
+              localStorage.setItem(
+                `kabaddi_timer_at_start_${prev.id}`,
+                MATCH_HALF_DURATION.toString(),
+              );
+              localStorage.setItem(`kabaddi_match_half_${prev.id}`, "2");
+
               axios
                 .patch(`${API_URL}/api/matches/${prev.id}`, {
-                  timer: 0,
-                  timerActive: false,
+                  half: 2,
+                  timer: MATCH_HALF_DURATION,
+                  timerActive: true,
+                  timerLastStartedAt: now,
+                  timerAtStart: MATCH_HALF_DURATION,
                 })
                 .catch(() => {});
+
+              return {
+                ...prev,
+                half: 2,
+                timer: MATCH_HALF_DURATION,
+                timerActive: true,
+                timerLastStartedAt: now,
+                timerAtStart: MATCH_HALF_DURATION,
+              };
             }
+
+            localStorage.setItem(`kabaddi_timer_active_${prev.id}`, "false");
+            localStorage.setItem(`kabaddi_timer_${prev.id}`, "0");
+            localStorage.setItem(`kabaddi_match_half_${prev.id}`, "2");
+
+            axios
+              .patch(`${API_URL}/api/matches/${prev.id}`, {
+                timer: 0,
+                timerActive: false,
+                half: 2,
+                status: "finished",
+                finishedAt: new Date().toISOString(),
+              })
+              .catch(() => {});
             setTimerActive(false);
-            return { ...prev, timer: 0, timerActive: false };
+            return {
+              ...prev,
+              timer: 0,
+              timerActive: false,
+              status: "finished",
+            };
           }
 
           return { ...prev, timer: computedTimer };

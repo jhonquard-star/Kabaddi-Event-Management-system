@@ -19,6 +19,7 @@ import OfficialsManagement from "./pages/OfficialsManagement";
 import OfficialScoreSheet from "./pages/OfficialScoreSheet";
 import EventManagement from "./pages/EventManagement";
 import CompletedGames from "./pages/CompletedGames";
+import LosingTeams from "./pages/LosingTeams";
 import "./index.css";
 
 function AppRouter() {
@@ -70,6 +71,7 @@ function AppRouter() {
             <Route path="/scoresheet" element={<OfficialScoreSheet />} />
             <Route path="/scoreboard" element={<Scoreboard />} />
             <Route path="/completed-games" element={<CompletedGames />} />
+            <Route path="/losing-teams" element={<LosingTeams />} />
           </Routes>
         </main>
       </div>

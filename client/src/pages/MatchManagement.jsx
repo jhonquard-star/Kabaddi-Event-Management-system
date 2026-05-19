@@ -8,7 +8,6 @@ import {
   Play,
   Trash2,
   RefreshCw,
-  CheckCircle2,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -54,11 +53,16 @@ const MatchManagement = () => {
       const matchesRes = await axios.get(`${API_URL}/api/matches/fixtures`, {
         params: { eventId },
       });
-      setFixtures(matchesRes.data);
+      const activeFixtures = Array.isArray(matchesRes.data)
+        ? matchesRes.data.filter(
+            (match) => String(match.status || "").toLowerCase() !== "finished",
+          )
+        : [];
+      setFixtures(activeFixtures);
 
       // 3. Reconstruct Pools dynamically from matches
       const reconstructedPools = {};
-      matchesRes.data.forEach((m) => {
+      activeFixtures.forEach((m) => {
         if (m.pool) {
           if (!reconstructedPools[m.pool]) {
             reconstructedPools[m.pool] = new Set();
@@ -677,29 +681,7 @@ const MatchManagement = () => {
                     }
                   }}
                 >
-                  <Play size={14} /> Send to Live Queue
-                </button>
-
-                <button
-                  className="btn btn-primary"
-                  style={{
-                    width: "100%",
-                    marginTop: "0.75rem",
-                    fontSize: "0.8rem",
-                    padding: "0.5rem",
-                  }}
-                  onClick={async () => {
-                    try {
-                      await axios.patch(`${API_URL}/api/matches/${f.id}`, {
-                        status: "finished",
-                      });
-                      await fetchMatchData();
-                    } catch {
-                      alert("Failed to mark fixture as completed");
-                    }
-                  }}
-                >
-                  <CheckCircle2 size={14} /> Mark Completed
+                  <Play size={14} /> Start Match
                 </button>
                 <button
                   className="btn btn-danger"

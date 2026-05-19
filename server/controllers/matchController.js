@@ -965,6 +965,192 @@ const deletePlayersBulk = async (req, res) => {
   }
 };
 
+const MATCH_HALF_DURATION = 1200;
+
+const normalizeRoundKey = (roundValue) =>
+  normalizeString(roundValue || "League").toLowerCase();
+
+const getMatchOutcome = (match) => {
+  const scoreA = Number(match?.scoreA || 0);
+  const scoreB = Number(match?.scoreB || 0);
+  if (!match?.teamAId || !match?.teamBId) return null;
+
+  if (match.teamBName === "BYE") {
+    return {
+      winnerTeamId: match.teamAId,
+      winnerTeamName: match.teamAName,
+      loserTeamId: match.teamBId || "",
+      loserTeamName: match.teamBName || "BYE",
+      resultMargin: scoreA,
+    };
+  }
+
+  if (scoreA === scoreB) {
+    return {
+      winnerTeamId: match.teamAId,
+      winnerTeamName: match.teamAName,
+      loserTeamId: match.teamBId,
+      loserTeamName: match.teamBName,
+      resultMargin: 0,
+    };
+  }
+
+  const isATop = scoreA > scoreB;
+  return {
+    winnerTeamId: isATop ? match.teamAId : match.teamBId,
+    winnerTeamName: isATop ? match.teamAName : match.teamBName,
+    loserTeamId: isATop ? match.teamBId : match.teamAId,
+    loserTeamName: isATop ? match.teamBName : match.teamAName,
+    resultMargin: Math.abs(scoreA - scoreB),
+  };
+};
+
+const getNextRoundLabel = (currentRound) => {
+  const label = normalizeString(currentRound || "League");
+  if (normalizeRoundKey(label) === "league") return "Knockout Round 1";
+  const roundMatch = label.match(/round\s*(\d+)/i);
+  if (!roundMatch) return "Round 2";
+  return `Round ${Number(roundMatch[1]) + 1}`;
+};
+
+const buildRoundFixturesFromWinners = (winners, context) => {
+  const pairings = [];
+  for (let i = 0; i < winners.length; i += 2) {
+    const teamA = winners[i];
+    const teamB = winners[i + 1];
+    if (!teamA) continue;
+
+    if (!teamB) {
+      pairings.push({
+        id: `match_${context.round}_${i}_${Date.now()}`,
+        teamAId: teamA.id,
+        teamBId: "",
+        teamAName: teamA.name,
+        teamBName: "BYE",
+        pool: teamA.pool || "Winners",
+        round: context.round,
+        status: "finished",
+        scoreA: 0,
+        scoreB: 0,
+        half: 2,
+        timer: 0,
+        timerAtStart: MATCH_HALF_DURATION,
+        timerLastStartedAt: null,
+        events: [],
+        tournamentMode: context.mode,
+        createdAt: new Date().toISOString(),
+      });
+      continue;
+    }
+
+    pairings.push({
+      id: `match_${context.round}_${i}_${Date.now()}`,
+      teamAId: teamA.id,
+      teamBId: teamB.id,
+      teamAName: teamA.name,
+      teamBName: teamB.name,
+      pool: teamA.pool || teamB.pool || "Winners",
+      round: context.round,
+      status: "scheduled",
+      scoreA: 0,
+      scoreB: 0,
+      half: 1,
+      timer: MATCH_HALF_DURATION,
+      timerAtStart: MATCH_HALF_DURATION,
+      timerLastStartedAt: null,
+      events: [],
+      tournamentMode: context.mode,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  return pairings;
+};
+
+const advanceTournamentIfReady = async (eventId, currentRound, mode) => {
+  const roundKey = normalizeRoundKey(currentRound);
+  const tournamentMode = normalizeString(mode || "league").toLowerCase();
+  const loadMatches = async () => {
+    if (db) {
+      const snapshot = await db
+        .collection("matches")
+        .where("eventId", "==", eventId)
+        .get();
+      return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    }
+
+    memoryDB = readFallbackStore();
+    return memoryDB.matches.filter((match) => match.eventId === eventId);
+  };
+
+  const allMatches = await loadMatches();
+  const currentRoundMatches = allMatches.filter(
+    (match) => normalizeRoundKey(match.round) === roundKey,
+  );
+
+  if (!currentRoundMatches.length) return;
+  if (
+    currentRoundMatches.some(
+      (match) => normalizeString(match.status) !== "finished",
+    )
+  ) {
+    return;
+  }
+
+  const winners = currentRoundMatches
+    .map((match) => {
+      const outcome = getMatchOutcome(match);
+      if (!outcome) return null;
+      return {
+        id: outcome.winnerTeamId,
+        name: outcome.winnerTeamName,
+        pool: match.pool || "Winners",
+      };
+    })
+    .filter(Boolean);
+
+  if (winners.length < 2) return;
+
+  const nextRound = getNextRoundLabel(currentRound);
+  if (
+    allMatches.some(
+      (match) =>
+        normalizeRoundKey(match.round) === normalizeRoundKey(nextRound),
+    )
+  ) {
+    return;
+  }
+
+  const nextFixtures = buildRoundFixturesFromWinners(winners, {
+    eventId,
+    round: nextRound,
+    mode: tournamentMode,
+  });
+
+  if (db) {
+    const batch = db.batch();
+    nextFixtures.forEach((fixture) => {
+      batch.set(db.collection("matches").doc(fixture.id), {
+        ...fixture,
+        eventId,
+      });
+    });
+    await batch.commit();
+  } else {
+    mutateFallbackStore((store) => {
+      store.matches.push(
+        ...nextFixtures.map((fixture) => ({
+          ...fixture,
+          eventId,
+        })),
+      );
+      return store;
+    });
+  }
+
+  await invalidateDataCaches(eventId);
+};
+
 // Matches
 const generateFixtures = async (req, res) => {
   const eventId = getEventIdFromReq(req);
@@ -1215,8 +1401,35 @@ const updateMatch = async (req, res) => {
   };
   try {
     if (!db) throw new Error("Firestore Database not initialized.");
-    await db.collection("matches").doc(id).update(payload);
+    const matchRef = db.collection("matches").doc(id);
+    const matchDoc = await matchRef.get();
+    if (!matchDoc.exists) {
+      return res.status(404).json({ error: "Match not found." });
+    }
+
+    const merged = { id: matchDoc.id, ...matchDoc.data(), ...payload };
+    if (normalizeString(merged.status) === "finished") {
+      const outcome = getMatchOutcome(merged);
+      if (outcome) {
+        merged.winnerTeamId = outcome.winnerTeamId;
+        merged.winnerTeamName = outcome.winnerTeamName;
+        merged.loserTeamId = outcome.loserTeamId;
+        merged.loserTeamName = outcome.loserTeamName;
+        merged.resultMargin = outcome.resultMargin;
+      }
+    }
+
+    await matchRef.update(merged);
     await invalidateDataCaches();
+
+    if (normalizeString(merged.status) === "finished") {
+      await advanceTournamentIfReady(
+        merged.eventId,
+        merged.round,
+        merged.tournamentMode,
+      );
+    }
+
     res.json({ success: true });
   } catch (error) {
     console.error(
@@ -1226,11 +1439,32 @@ const updateMatch = async (req, res) => {
     mutateFallbackStore((store) => {
       const index = store.matches.findIndex((match) => match.id === id);
       if (index !== -1) {
-        store.matches[index] = { ...store.matches[index], ...payload };
+        const merged = { ...store.matches[index], ...payload };
+        if (normalizeString(merged.status) === "finished") {
+          const outcome = getMatchOutcome(merged);
+          if (outcome) {
+            merged.winnerTeamId = outcome.winnerTeamId;
+            merged.winnerTeamName = outcome.winnerTeamName;
+            merged.loserTeamId = outcome.loserTeamId;
+            merged.loserTeamName = outcome.loserTeamName;
+            merged.resultMargin = outcome.resultMargin;
+          }
+        }
+        store.matches[index] = merged;
       }
       return store;
     });
     await invalidateDataCaches();
+
+    const updatedMatch = memoryDB.matches.find((match) => match.id === id);
+    if (normalizeString(updatedMatch?.status) === "finished") {
+      await advanceTournamentIfReady(
+        updatedMatch.eventId,
+        updatedMatch.round,
+        updatedMatch.tournamentMode,
+      );
+    }
+
     res.json({ success: true });
   }
 };

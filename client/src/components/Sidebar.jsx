@@ -13,6 +13,7 @@ import {
   FileSignature,
   CalendarRange,
   ListChecks,
+  AlertTriangle,
   X,
 } from "lucide-react";
 import {
@@ -68,6 +69,7 @@ const Sidebar = ({ isMobileOpen = false, onClose = () => {} }) => {
     { to: "/scoresheet", icon: FileSignature, label: "Official Score Sheet" },
     { to: "/scoreboard", icon: MonitorPlay, label: "Live Scoreboard" },
     { to: "/completed-games", icon: ListChecks, label: "Completed Games" },
+    { to: "/losing-teams", icon: AlertTriangle, label: "Losing Teams" },
   ];
 
   const refereeLinks = [
