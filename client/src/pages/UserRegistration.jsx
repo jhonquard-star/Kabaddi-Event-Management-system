@@ -223,7 +223,33 @@ export default function UserRegistration() {
         const res = await axios.get(`${API_URL}/api/matches/events`);
         const list = Array.isArray(res.data) ? res.data : [];
         setEvents(list);
-        const preferredEventId = getPreferredEventId(list);
+        let preferredEventId = getPreferredEventId(list);
+
+        // If no events exist, create a default event so users can register
+        if (!list.length) {
+          try {
+            const defaultEventPayload = {
+              name:
+                EVENT_DISPLAY_TITLE || "Jharkhand Senior State Championship",
+              state: "Jharkhand",
+              district: "",
+              startDate: "2026-06-05",
+              endDate: "2026-06-07",
+              isActive: true,
+            };
+            const createRes = await axios.post(
+              `${API_URL}/api/matches/events`,
+              defaultEventPayload,
+            );
+            const created = createRes.data;
+            const newList = [created];
+            setEvents(newList);
+            preferredEventId = created.id || "";
+          } catch (e) {
+            console.error("Failed to create default event", e);
+          }
+        }
+
         if (preferredEventId) {
           setForm((prev) => ({
             ...prev,
