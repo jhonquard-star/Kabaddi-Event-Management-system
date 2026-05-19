@@ -39,9 +39,16 @@ app.use((err, req, res, next) => {
     console.error("Invalid JSON in request body:", err.message);
     return res.status(400).json({ error: "Invalid JSON payload format" });
   }
-
   console.error(err.stack);
-  res.status(500).json({ error: "Something went wrong!" });
+
+  const exposeDetails =
+    process.env.DEBUG_ERRORS === "true" ||
+    process.env.NODE_ENV !== "production";
+  const message = exposeDetails
+    ? err.message || "Something went wrong!"
+    : "Something went wrong!";
+
+  res.status(500).json({ error: message });
 });
 
 app.listen(PORT, () => {

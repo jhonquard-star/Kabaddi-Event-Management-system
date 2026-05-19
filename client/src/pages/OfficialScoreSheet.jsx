@@ -5,6 +5,7 @@ import {
   Slash,
   Trophy,
 } from "lucide-react";
+import { EVENT_DISPLAY_TITLE, EVENT_DATES, EVENT_VENUE } from "../data/eventInfo";
 import {
   performanceRows,
   samplePlayersA,
@@ -80,7 +81,7 @@ const OfficialScoreSheet = () => {
         <div className="sheet-block admin-block">
           <div>
             <span className="eyebrow">Tournament</span>
-            <strong>Jharkhand Professional Kabaddi League</strong>
+            <strong>{EVENT_DISPLAY_TITLE}</strong>
           </div>
           <div>
             <span className="eyebrow">Match No.</span>
@@ -88,7 +89,7 @@ const OfficialScoreSheet = () => {
           </div>
           <div>
             <span className="eyebrow">Venue / Date</span>
-            <strong>Indoor Stadium · 11 May 2026</strong>
+            <strong>{EVENT_VENUE} · {EVENT_DATES}</strong>
           </div>
           <div>
             <span className="eyebrow">Toss</span>

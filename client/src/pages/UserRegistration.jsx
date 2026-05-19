@@ -20,11 +20,22 @@ import {
 } from "../utils/playerValidation";
 import { getActiveEventId } from "../utils/eventSelection";
 import { API_URL } from "../utils/apiBase";
+import {
+  EVENT_TITLE,
+  EVENT_DISPLAY_TITLE,
+  EVENT_ORGANIZERS,
+  EVENT_VENUE,
+  EVENT_DATES,
+  EVENT_CATEGORIES,
+  EVENT_DISCIPLINE,
+  EVENT_WELCOME,
+  FIXED_EVENT_NAME as FIXED_EVENT_NAME_OVERRIDE,
+} from "../data/eventInfo";
 // Hero background (Cloudinary image provided)
 const HERO_BG_URL =
   "https://res.cloudinary.com/dcqo5qt7b/image/upload/v1767294465/ddka_gallery/yc2i3aphkskozb3sktyl.jpg";
 const INDOCREONIX_LOGO_URL = "https://indocreonix.com/logo.png";
-const FIXED_EVENT_NAME = "Jharkhand Senior State Championship";
+const FIXED_EVENT_NAME = FIXED_EVENT_NAME_OVERRIDE;
 const PARTNER_LOGOS = [
   { src: "/logos/AKFI.png", alt: "AKFI" },
   { src: "/logos/DDKA.png", alt: "DDKA" },
@@ -762,9 +773,9 @@ export default function UserRegistration() {
                   type="text"
                   disabled
                   value={
-                    events.find((e) => e.id === form.eventId)?.name ||
-                    FIXED_EVENT_NAME
-                  }
+                      events.find((e) => e.id === form.eventId)?.name ||
+                      EVENT_DISPLAY_TITLE || FIXED_EVENT_NAME
+                    }
                   placeholder="Event"
                 />
               </div>
