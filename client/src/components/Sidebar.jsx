@@ -12,6 +12,7 @@ import {
   ClipboardList,
   FileSignature,
   CalendarRange,
+  ListChecks,
   X,
 } from "lucide-react";
 import {
@@ -66,6 +67,7 @@ const Sidebar = ({ isMobileOpen = false, onClose = () => {} }) => {
     { to: "/officials", icon: ClipboardList, label: "Officials Center" },
     { to: "/scoresheet", icon: FileSignature, label: "Official Score Sheet" },
     { to: "/scoreboard", icon: MonitorPlay, label: "Live Scoreboard" },
+    { to: "/completed-games", icon: ListChecks, label: "Completed Games" },
   ];
 
   const refereeLinks = [
@@ -150,7 +152,7 @@ const Sidebar = ({ isMobileOpen = false, onClose = () => {} }) => {
               letterSpacing: "0.1em",
             }}
           >
-            MANAGEMANT SYSTEM
+            MANAGEMENT SYSTEM
           </div>
           <div
             style={{
@@ -240,7 +242,7 @@ const Sidebar = ({ isMobileOpen = false, onClose = () => {} }) => {
           textAlign: "center",
         }}
       >
-        &copy; 2026 Kabaddi managemant system by INDOCREONIX
+        &copy; 2026 Kabaddi Management System by INDOCREONIX
       </div>
 
       <style>{`

@@ -18,6 +18,7 @@ import Scoreboard from "./pages/Scoreboard";
 import OfficialsManagement from "./pages/OfficialsManagement";
 import OfficialScoreSheet from "./pages/OfficialScoreSheet";
 import EventManagement from "./pages/EventManagement";
+import CompletedGames from "./pages/CompletedGames";
 import "./index.css";
 
 function AppRouter() {
@@ -68,6 +69,7 @@ function AppRouter() {
             <Route path="/official/:role" element={<RefereeDashboard />} />
             <Route path="/scoresheet" element={<OfficialScoreSheet />} />
             <Route path="/scoreboard" element={<Scoreboard />} />
+            <Route path="/completed-games" element={<CompletedGames />} />
           </Routes>
         </main>
       </div>

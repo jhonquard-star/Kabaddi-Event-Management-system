@@ -5,6 +5,8 @@
   --primary-glow: rgba(31, 41, 55, 0.15);
   --secondary: #4f46e5; /* Indigo Blue (Google-like) */
   --accent: #059669; /* Emerald Green */
+  --brand-gold: #f2b203;
+  --brand-navy: #0d1b2a;
   --bg-dark: #ffffff;
   --bg-panel: rgba(255, 255, 255, 0.98);
   --glass-border: rgba(31, 41, 55, 0.1);
@@ -40,8 +42,96 @@ body {
       circle at 85% 30%,
       rgba(5, 150, 105, 0.04) 0%,
       transparent 50%
-    );
+    ),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   background-attachment: fixed;
+}
+
+.branding-bar-wrap {
+  width: 100%;
+  background:
+    linear-gradient(90deg, #0d1b2a 0%, #1b263b 45%, #202124 100%),
+    linear-gradient(90deg, rgba(242, 178, 3, 0.16), rgba(79, 70, 229, 0.12));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(13, 27, 42, 0.22);
+  position: sticky;
+  top: 0;
+  z-index: 120;
+}
+
+.branding-bar-inner {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0.55rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.branding-brand-mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 0.86rem;
+  letter-spacing: 0.08em;
+  color: #0d1b2a;
+  background: linear-gradient(135deg, #f2b203 0%, #ffe07a 100%);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
+}
+
+.branding-text-block {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.branding-title {
+  color: #f8fafc;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  font-size: 0.82rem;
+}
+
+.branding-subtitle {
+  color: #cbd5e1;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.branding-chip {
+  margin-left: auto;
+  border: 1px solid rgba(242, 178, 3, 0.36);
+  color: #f8fafc;
+  background: rgba(242, 178, 3, 0.14);
+  border-radius: 999px;
+  font-size: 0.69rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.34rem 0.62rem;
+}
+
+.branding-line {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(242, 178, 3, 0.4),
+    transparent
+  );
+}
+
+.branding-footnote {
+  text-align: center;
+  color: #9ca3af;
+  font-size: 0.67rem;
+  padding: 0.26rem 0.5rem 0.38rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 /* Scrollbar */
@@ -585,7 +675,7 @@ select optgroup {
 
 .detail-list dd {
   margin: 0;
-  color: white;
+  color: var(--text-main);
   font-weight: 600;
 }
 
@@ -741,6 +831,10 @@ select optgroup {
   gap: 1rem;
 }
 
+.match-page-header > div:last-child {
+  flex-wrap: wrap;
+}
+
 .match-pools-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -782,6 +876,17 @@ select optgroup {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.5rem;
+}
+
+.official-running-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+.official-running-grid-panel-a {
+  border-right: 1px solid var(--glass-border);
+  padding-right: 2rem;
 }
 
 .official-action-row {
@@ -1264,9 +1369,34 @@ select optgroup {
     justify-content: center;
   }
 
+  .match-page-header > div:last-child {
+    width: 100%;
+    align-items: stretch !important;
+  }
+
+  .match-page-header > div:last-child > div {
+    width: 100%;
+  }
+
+  .match-page-header > div:last-child select {
+    width: 100%;
+  }
+
   .match-pools-grid,
   .official-action-grid {
     grid-template-columns: 1fr;
+  }
+
+  .official-running-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .official-running-grid-panel-a {
+    border-right: 0;
+    border-bottom: 1px solid var(--glass-border);
+    padding-right: 0;
+    padding-bottom: 1rem;
   }
 
   .official-score-strip {
@@ -1373,6 +1503,26 @@ select optgroup {
   .main-content {
     padding: 1rem;
     width: 100%;
+  }
+
+  .branding-bar-inner {
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    padding: 0.55rem 0.75rem;
+  }
+
+  .branding-chip {
+    margin-left: 0;
+    width: 100%;
+    text-align: center;
+  }
+
+  .branding-subtitle {
+    font-size: 0.7rem;
+  }
+
+  .branding-footnote {
+    font-size: 0.62rem;
   }
 
   .data-grid,

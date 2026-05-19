@@ -907,11 +907,72 @@ const deletePlayer = async (req, res) => {
   }
 };
 
+const deletePlayersBulk = async (req, res) => {
+  const eventId = normalizeString(req.query.eventId || req.body.eventId);
+  const teamId = normalizeString(req.query.teamId || req.body.teamId);
+
+  if (!eventId) {
+    return res.status(400).json({ error: "Event selection is required." });
+  }
+
+  try {
+    if (!db) throw new Error("Firestore Database not initialized.");
+
+    let query = db.collection("players").where("eventId", "==", eventId);
+    if (teamId) {
+      query = query.where("teamId", "==", teamId);
+    }
+
+    const snapshot = await query.get();
+
+    await Promise.all(
+      snapshot.docs.map((doc) =>
+        deleteCloudinaryAssetsFromRecord(doc.data(), [
+          "photoUrl",
+          "photoPublicId",
+          "aadharFrontUrl",
+          "aadharBackUrl",
+        ]),
+      ),
+    );
+
+    const batch = db.batch();
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+
+    await invalidateDataCaches(eventId);
+    res.json({ success: true, deletedCount: snapshot.size });
+  } catch (error) {
+    console.error(
+      "Firestore Error in deletePlayersBulk, using memory fallback:",
+      error.message,
+    );
+
+    let deletedCount = 0;
+    mutateFallbackStore((store) => {
+      const before = store.players.length;
+      store.players = store.players.filter((player) => {
+        if (player.eventId !== eventId) return true;
+        if (teamId && player.teamId !== teamId) return true;
+        return false;
+      });
+      deletedCount = before - store.players.length;
+      return store;
+    });
+
+    await invalidateDataCaches(eventId);
+    res.json({ success: true, deletedCount });
+  }
+};
+
 // Matches
 const generateFixtures = async (req, res) => {
   const eventId = getEventIdFromReq(req);
   if (!eventId)
     return res.status(400).json({ error: "Event selection is required." });
+  const tournamentMode = normalizeString(
+    req.body.mode || "league",
+  ).toLowerCase();
 
   let inputTeams = Array.isArray(req.body.teams) ? req.body.teams : [];
   if (!inputTeams.length) {
@@ -935,31 +996,46 @@ const generateFixtures = async (req, res) => {
         .get();
       inputTeams = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     }
-    const { pools, fixtures } = genFix(inputTeams, numPools);
+    const { pools, fixtures } = genFix(inputTeams, numPools, tournamentMode);
+    const createdAt = new Date().toISOString();
+    const payload = fixtures.map((fixture) => ({
+      ...fixture,
+      eventId,
+      tournamentMode,
+      createdAt,
+    }));
+
+    const existingSnapshot = await db
+      .collection("matches")
+      .where("eventId", "==", eventId)
+      .get();
+
     const batch = db.batch();
-    fixtures.forEach((fixture) => {
+    existingSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    payload.forEach((fixture) => {
       const ref = db.collection("matches").doc(fixture.id);
-      batch.set(ref, {
-        ...fixture,
-        eventId,
-        createdAt: new Date().toISOString(),
-      });
+      batch.set(ref, fixture);
     });
+
     await batch.commit();
     await invalidateDataCaches(eventId);
-    res.json({ pools, fixtures });
+    res.json({ pools, fixtures: payload });
   } catch (error) {
     console.error(
       "Firestore Error in generateFixtures, using memory fallback:",
       error.message,
     );
-    const { pools, fixtures } = genFix(inputTeams, numPools);
+    const { pools, fixtures } = genFix(inputTeams, numPools, tournamentMode);
     const payload = fixtures.map((fixture) => ({
       ...fixture,
       eventId,
+      tournamentMode,
       createdAt: new Date().toISOString(),
     }));
     mutateFallbackStore((store) => {
+      store.matches = store.matches.filter(
+        (match) => match.eventId !== eventId,
+      );
       store.matches.push(...payload);
       return store;
     });
@@ -968,10 +1044,135 @@ const generateFixtures = async (req, res) => {
   }
 };
 
+const deleteAllFixtures = async (req, res) => {
+  const eventId = normalizeString(req.query.eventId || req.body.eventId);
+  if (!eventId) {
+    return res.status(400).json({ error: "Event selection is required." });
+  }
+
+  try {
+    if (!db) throw new Error("Firestore Database not initialized.");
+    const snapshot = await db
+      .collection("matches")
+      .where("eventId", "==", eventId)
+      .get();
+
+    const batch = db.batch();
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+
+    await invalidateDataCaches(eventId);
+    res.json({ success: true, deletedCount: snapshot.size });
+  } catch (error) {
+    console.error(
+      "Firestore Error in deleteAllFixtures, using memory fallback:",
+      error.message,
+    );
+    let deletedCount = 0;
+    mutateFallbackStore((store) => {
+      const before = store.matches.length;
+      store.matches = store.matches.filter(
+        (match) => match.eventId !== eventId,
+      );
+      deletedCount = before - store.matches.length;
+      return store;
+    });
+    await invalidateDataCaches(eventId);
+    res.json({ success: true, deletedCount });
+  }
+};
+
+const rearrangeFixtures = async (req, res) => {
+  const eventId = getEventIdFromReq(req);
+  if (!eventId) {
+    return res.status(400).json({ error: "Event selection is required." });
+  }
+
+  const numPools = parseInt(req.body.numPools) || 4;
+  const tournamentMode = normalizeString(
+    req.body.mode || "league",
+  ).toLowerCase();
+  let inputTeams = [];
+
+  try {
+    if (!db) throw new Error("Firestore Database not initialized.");
+    const snapshot = await db
+      .collection("teams")
+      .where("eventId", "==", eventId)
+      .get();
+    inputTeams = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+    if (inputTeams.length < 2) {
+      return res.status(400).json({
+        error: "At least 2 teams are required to rearrange fixtures.",
+      });
+    }
+
+    const { pools, fixtures } = genFix(inputTeams, numPools, tournamentMode);
+    const createdAt = new Date().toISOString();
+    const payload = fixtures.map((fixture) => ({
+      ...fixture,
+      eventId,
+      tournamentMode,
+      createdAt,
+    }));
+
+    const existingSnapshot = await db
+      .collection("matches")
+      .where("eventId", "==", eventId)
+      .get();
+
+    const batch = db.batch();
+    existingSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    payload.forEach((fixture) => {
+      const ref = db.collection("matches").doc(fixture.id);
+      batch.set(ref, fixture);
+    });
+    await batch.commit();
+
+    await invalidateDataCaches(eventId);
+    res.json({ pools, fixtures: payload });
+  } catch (error) {
+    console.error(
+      "Firestore Error in rearrangeFixtures, using memory fallback:",
+      error.message,
+    );
+    memoryDB = readFallbackStore();
+    inputTeams = memoryDB.teams.filter((team) => team.eventId === eventId);
+
+    if (inputTeams.length < 2) {
+      return res.status(400).json({
+        error: "At least 2 teams are required to rearrange fixtures.",
+      });
+    }
+
+    const { pools, fixtures } = genFix(inputTeams, numPools, tournamentMode);
+    const payload = fixtures.map((fixture) => ({
+      ...fixture,
+      eventId,
+      tournamentMode,
+      createdAt: new Date().toISOString(),
+    }));
+
+    mutateFallbackStore((store) => {
+      store.matches = store.matches.filter(
+        (match) => match.eventId !== eventId,
+      );
+      store.matches.push(...payload);
+      return store;
+    });
+
+    await invalidateDataCaches(eventId);
+    res.json({ pools, fixtures: payload });
+  }
+};
+
 const getMatches = async (req, res) => {
   const eventId = normalizeString(req.query.eventId);
+  const status = normalizeString(req.query.status).toLowerCase();
+  const mode = normalizeString(req.query.mode).toLowerCase();
   const cacheKey = makeKey("matches", eventId || "all");
-  const matches = await readOrFetch({
+  let matches = await readOrFetch({
     cacheKey,
     ttl: 30,
     firestoreFetch: async () => {
@@ -989,14 +1190,32 @@ const getMatches = async (req, res) => {
     },
   });
 
+  if (status) {
+    matches = matches.filter(
+      (match) => normalizeString(match.status).toLowerCase() === status,
+    );
+  }
+
+  if (mode) {
+    matches = matches.filter(
+      (match) =>
+        normalizeString(match.tournamentMode || "league").toLowerCase() ===
+        mode,
+    );
+  }
+
   res.json(matches);
 };
 
 const updateMatch = async (req, res) => {
   const { id } = req.params;
+  const payload = {
+    ...req.body,
+    updatedAt: new Date().toISOString(),
+  };
   try {
     if (!db) throw new Error("Firestore Database not initialized.");
-    await db.collection("matches").doc(id).update(req.body);
+    await db.collection("matches").doc(id).update(payload);
     await invalidateDataCaches();
     res.json({ success: true });
   } catch (error) {
@@ -1007,7 +1226,7 @@ const updateMatch = async (req, res) => {
     mutateFallbackStore((store) => {
       const index = store.matches.findIndex((match) => match.id === id);
       if (index !== -1) {
-        store.matches[index] = { ...store.matches[index], ...req.body };
+        store.matches[index] = { ...store.matches[index], ...payload };
       }
       return store;
     });
@@ -1074,6 +1293,162 @@ const getLiveMatch = async (req, res) => {
   if (!liveMatch)
     return res.status(404).json({ error: "No matches available" });
   res.json(liveMatch);
+};
+
+const getScoreboardFeed = async (req, res) => {
+  const eventId = normalizeString(req.query.eventId);
+  const matchId = normalizeString(req.query.matchId);
+
+  if (!eventId && !matchId) {
+    return res
+      .status(400)
+      .json({ error: "eventId or matchId is required for scoreboard feed." });
+  }
+
+  try {
+    let matches = [];
+
+    if (!db) throw new Error("Database not initialized");
+
+    if (matchId) {
+      const doc = await db.collection("matches").doc(matchId).get();
+      if (doc.exists) matches = [{ id: doc.id, ...doc.data() }];
+    } else {
+      const snapshot = await db
+        .collection("matches")
+        .where("eventId", "==", eventId)
+        .get();
+      matches = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    }
+
+    if (!matches.length) {
+      return res
+        .status(404)
+        .json({ error: "No matches found for scoreboard." });
+    }
+
+    const ordered = [...matches].sort(
+      (a, b) =>
+        new Date(b.updatedAt || b.createdAt || 0).getTime() -
+        new Date(a.updatedAt || a.createdAt || 0).getTime(),
+    );
+    const liveMatch =
+      ordered.find((match) => match.status === "live") || ordered[0];
+
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      eventId: liveMatch.eventId || eventId || "",
+      match: {
+        id: liveMatch.id,
+        teamAId: liveMatch.teamAId || "",
+        teamAName: liveMatch.teamAName || "",
+        teamBId: liveMatch.teamBId || "",
+        teamBName: liveMatch.teamBName || "",
+        scoreA: Number(liveMatch.scoreA || 0),
+        scoreB: Number(liveMatch.scoreB || 0),
+        status: normalizeString(liveMatch.status || "scheduled"),
+        timer: Number(liveMatch.timer || 0),
+        timerActive: Boolean(liveMatch.timerActive),
+        timerLastStartedAt: liveMatch.timerLastStartedAt || null,
+        timerAtStart: liveMatch.timerAtStart || null,
+        pool: liveMatch.pool || "",
+        round: liveMatch.round || "",
+        tournamentMode: normalizeString(liveMatch.tournamentMode || "league"),
+        events: Array.isArray(liveMatch.events) ? liveMatch.events : [],
+        updatedAt: liveMatch.updatedAt || liveMatch.createdAt || null,
+      },
+    };
+
+    res.json(payload);
+  } catch (error) {
+    console.error(
+      "Firestore Error in getScoreboardFeed, using memory fallback:",
+      error.message,
+    );
+
+    memoryDB = readFallbackStore();
+    const matches = matchId
+      ? memoryDB.matches.filter((match) => match.id === matchId)
+      : memoryDB.matches.filter((match) => match.eventId === eventId);
+
+    if (!matches.length) {
+      return res
+        .status(404)
+        .json({ error: "No matches found for scoreboard." });
+    }
+
+    const ordered = [...matches].sort(
+      (a, b) =>
+        new Date(b.updatedAt || b.createdAt || 0).getTime() -
+        new Date(a.updatedAt || a.createdAt || 0).getTime(),
+    );
+    const liveMatch =
+      ordered.find((match) => match.status === "live") || ordered[0];
+
+    res.json({
+      generatedAt: new Date().toISOString(),
+      eventId: liveMatch.eventId || eventId || "",
+      match: {
+        id: liveMatch.id,
+        teamAId: liveMatch.teamAId || "",
+        teamAName: liveMatch.teamAName || "",
+        teamBId: liveMatch.teamBId || "",
+        teamBName: liveMatch.teamBName || "",
+        scoreA: Number(liveMatch.scoreA || 0),
+        scoreB: Number(liveMatch.scoreB || 0),
+        status: normalizeString(liveMatch.status || "scheduled"),
+        timer: Number(liveMatch.timer || 0),
+        timerActive: Boolean(liveMatch.timerActive),
+        timerLastStartedAt: liveMatch.timerLastStartedAt || null,
+        timerAtStart: liveMatch.timerAtStart || null,
+        pool: liveMatch.pool || "",
+        round: liveMatch.round || "",
+        tournamentMode: normalizeString(liveMatch.tournamentMode || "league"),
+        events: Array.isArray(liveMatch.events) ? liveMatch.events : [],
+        updatedAt: liveMatch.updatedAt || liveMatch.createdAt || null,
+      },
+    });
+  }
+};
+
+const getLiveGamesFeed = async (req, res) => {
+  const eventId = normalizeString(req.query.eventId);
+  if (!eventId) {
+    return res.status(400).json({ error: "eventId is required." });
+  }
+
+  try {
+    if (!db) throw new Error("Database not initialized");
+
+    const snapshot = await db
+      .collection("matches")
+      .where("eventId", "==", eventId)
+      .where("status", "==", "live")
+      .get();
+
+    const matches = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    res.json({
+      generatedAt: new Date().toISOString(),
+      eventId,
+      liveMatches: matches,
+    });
+  } catch (error) {
+    console.error(
+      "Firestore Error in getLiveGamesFeed, using memory fallback:",
+      error.message,
+    );
+
+    memoryDB = readFallbackStore();
+    const matches = memoryDB.matches.filter(
+      (match) => match.eventId === eventId && match.status === "live",
+    );
+
+    res.json({
+      generatedAt: new Date().toISOString(),
+      eventId,
+      liveMatches: matches,
+    });
+  }
 };
 
 // Stats
@@ -1171,10 +1546,15 @@ module.exports = {
   addPlayer,
   updatePlayer,
   deletePlayer,
+  deletePlayersBulk,
   generateFixtures,
+  deleteAllFixtures,
+  rearrangeFixtures,
   getMatches,
   updateMatch,
   deleteMatch,
   getLiveMatch,
+  getScoreboardFeed,
+  getLiveGamesFeed,
   getStats,
 };

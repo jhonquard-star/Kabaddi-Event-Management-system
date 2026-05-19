@@ -14,11 +14,23 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { API_URL } from "../utils/apiBase";
+import {
+  EVENT_CHANGE_EVENT,
+  MATCH_CHANGE_EVENT,
+  getActiveEventId,
+  getActiveMatchId,
+  setActiveMatchId,
+} from "../utils/eventSelection";
 
 const RefereeDashboard = () => {
   const { role } = useParams(); // 'chief-referee', 'umpire-1', etc.
   const [match, setMatch] = useState(null);
   const [timerActive, setTimerActive] = useState(false);
+  const [eventId, setEventId] = useState(getActiveEventId());
+  const [liveMatches, setLiveMatches] = useState([]);
+  const [selectedMatchId, setSelectedMatchId] = useState(
+    getActiveMatchId(getActiveEventId()),
+  );
   const timerActiveRef = useRef(false);
 
   // Sync ref with state
@@ -27,15 +39,20 @@ const RefereeDashboard = () => {
   }, [timerActive]);
 
   // Helper to read current timer and score overrides from localStorage
-  const getLocalStorageTimer = () => {
-    const active = localStorage.getItem("kabaddi_timer_active") === "true";
-    const lastStarted = localStorage.getItem("kabaddi_timer_last_started_at");
-    const atStart = localStorage.getItem("kabaddi_timer_at_start");
-    const paused = localStorage.getItem("kabaddi_timer");
+  const getLocalStorageTimer = (matchId) => {
+    if (!matchId) return null;
+
+    const active =
+      localStorage.getItem(`kabaddi_timer_active_${matchId}`) === "true";
+    const lastStarted = localStorage.getItem(
+      `kabaddi_timer_last_started_at_${matchId}`,
+    );
+    const atStart = localStorage.getItem(`kabaddi_timer_at_start_${matchId}`);
+    const paused = localStorage.getItem(`kabaddi_timer_${matchId}`);
 
     const scores = {};
-    const scoreA = localStorage.getItem("kabaddi_local_scoreA");
-    const scoreB = localStorage.getItem("kabaddi_local_scoreB");
+    const scoreA = localStorage.getItem(`kabaddi_local_scoreA_${matchId}`);
+    const scoreB = localStorage.getItem(`kabaddi_local_scoreB_${matchId}`);
     if (scoreA !== null) scores.scoreA = parseInt(scoreA);
     if (scoreB !== null) scores.scoreB = parseInt(scoreB);
 
@@ -47,13 +64,13 @@ const RefereeDashboard = () => {
         timerLastStartedAt: parseInt(lastStarted),
         timerAtStart: parseInt(atStart) || 1200,
         timer: computed,
-        ...scores
+        ...scores,
       };
     } else if (paused !== null) {
       return {
         timerActive: false,
         timer: parseInt(paused),
-        ...scores
+        ...scores,
       };
     }
     return Object.keys(scores).length > 0 ? scores : null;
@@ -62,61 +79,142 @@ const RefereeDashboard = () => {
   // Synchronize state with localStorage on mount & via listener
   useEffect(() => {
     const handleStorageChange = () => {
-      const local = getLocalStorageTimer();
+      const local = getLocalStorageTimer(selectedMatchId || match?.id);
       if (local && match) {
         if (local.timerActive !== undefined) setTimerActive(local.timerActive);
-        setMatch(prev => prev ? { ...prev, ...local } : null);
+        setMatch((prev) => (prev ? { ...prev, ...local } : null));
       }
     };
 
     window.addEventListener("storage", handleStorageChange);
     // Initial sync
-    const local = getLocalStorageTimer();
+    const local = getLocalStorageTimer(selectedMatchId || match?.id);
     if (local && local.timerActive !== undefined) {
       setTimerActive(local.timerActive);
     }
 
     return () => window.removeEventListener("storage", handleStorageChange);
-  }, [match?.id]);
+  }, [match?.id, selectedMatchId]);
 
   useEffect(() => {
+    const onEventChange = (evt) => {
+      const nextEventId = evt.detail?.eventId || getActiveEventId();
+      setEventId(nextEventId);
+      setSelectedMatchId(getActiveMatchId(nextEventId));
+    };
+    const onMatchChange = (evt) => {
+      if (evt.detail?.eventId && evt.detail.eventId !== eventId) return;
+      setSelectedMatchId(evt.detail?.matchId || "");
+    };
+    window.addEventListener(EVENT_CHANGE_EVENT, onEventChange);
+    window.addEventListener(MATCH_CHANGE_EVENT, onMatchChange);
+
     const fetchMatch = async () => {
       try {
-        const res = await axios.get(`${API_URL}/api/matches/live`);
-        setMatch(prev => {
-          let updatedData = { ...res.data };
-          
+        if (!eventId) {
+          setLiveMatches([]);
+          setSelectedMatchId("");
+          setMatch(null);
+          setTimerActive(false);
+          return;
+        }
+
+        const liveRes = await axios.get(
+          `${API_URL}/api/matches/scoreboard/live-games`,
+          {
+            params: { eventId },
+          },
+        );
+
+        const currentLiveMatches = Array.isArray(liveRes.data?.liveMatches)
+          ? liveRes.data.liveMatches
+          : [];
+        setLiveMatches(currentLiveMatches);
+
+        const persistedMatchId = getActiveMatchId(eventId);
+        const candidateId =
+          selectedMatchId ||
+          persistedMatchId ||
+          currentLiveMatches[0]?.id ||
+          "";
+
+        const activeMatchId = currentLiveMatches.some(
+          (item) => item.id === candidateId,
+        )
+          ? candidateId
+          : currentLiveMatches[0]?.id || "";
+
+        if (!activeMatchId) {
+          setSelectedMatchId("");
+          setMatch(null);
+          setTimerActive(false);
+          return;
+        }
+
+        if (activeMatchId !== selectedMatchId) {
+          setSelectedMatchId(activeMatchId);
+          setActiveMatchId(activeMatchId, eventId);
+        }
+
+        const res = await axios.get(`${API_URL}/api/matches/scoreboard/feed`, {
+          params: { eventId, matchId: activeMatchId },
+        });
+        const currentMatch = res.data?.match || null;
+
+        if (!currentMatch) {
+          setMatch(null);
+          setTimerActive(false);
+          return;
+        }
+
+        setMatch((prev) => {
+          let updatedData = { ...currentMatch };
+
           // Reconcile Score A local overrides to avoid background API overwriting newer values (stutter)
-          const localScoreA = localStorage.getItem("kabaddi_local_scoreA");
+          const localScoreA = localStorage.getItem(
+            `kabaddi_local_scoreA_${activeMatchId}`,
+          );
           if (localScoreA !== null) {
             const valA = parseInt(localScoreA);
             if (updatedData.scoreA < valA) {
               updatedData.scoreA = valA;
             } else {
-              localStorage.removeItem("kabaddi_local_scoreA");
+              localStorage.removeItem(`kabaddi_local_scoreA_${activeMatchId}`);
             }
           }
 
           // Reconcile Score B local overrides to avoid background API overwriting newer values (stutter)
-          const localScoreB = localStorage.getItem("kabaddi_local_scoreB");
+          const localScoreB = localStorage.getItem(
+            `kabaddi_local_scoreB_${activeMatchId}`,
+          );
           if (localScoreB !== null) {
             const valB = parseInt(localScoreB);
             if (updatedData.scoreB < valB) {
               updatedData.scoreB = valB;
             } else {
-              localStorage.removeItem("kabaddi_local_scoreB");
+              localStorage.removeItem(`kabaddi_local_scoreB_${activeMatchId}`);
             }
           }
 
-          const local = getLocalStorageTimer();
-          
+          const local = getLocalStorageTimer(activeMatchId);
+
           // Prioritize high-performance local storage timer over background DB fetch
           if (local) {
             updatedData = { ...updatedData, ...local };
-          } else if (updatedData.timerActive && updatedData.timerLastStartedAt) {
-             const timerAtStart = updatedData.timerAtStart !== undefined ? updatedData.timerAtStart : (updatedData.timer !== undefined ? updatedData.timer : 1200);
-             const elapsed = Math.floor((Date.now() - updatedData.timerLastStartedAt) / 1000);
-             updatedData.timer = Math.max(0, timerAtStart - elapsed);
+          } else if (
+            updatedData.timerActive &&
+            updatedData.timerLastStartedAt
+          ) {
+            const timerAtStart =
+              updatedData.timerAtStart !== undefined
+                ? updatedData.timerAtStart
+                : updatedData.timer !== undefined
+                  ? updatedData.timer
+                  : 1200;
+            const elapsed = Math.floor(
+              (Date.now() - updatedData.timerLastStartedAt) / 1000,
+            );
+            updatedData.timer = Math.max(0, timerAtStart - elapsed);
           }
 
           if (!prev) {
@@ -125,12 +223,12 @@ const RefereeDashboard = () => {
           }
           // Set timer active state from backend so all roles know it's running
           if (updatedData.timerActive !== undefined) {
-             setTimerActive(updatedData.timerActive);
+            setTimerActive(updatedData.timerActive);
           }
           // Avoid stuttering the clock if we are visually ticking it locally
           return {
             ...updatedData,
-            timer: timerActiveRef.current ? prev.timer : updatedData.timer
+            timer: timerActiveRef.current ? prev.timer : updatedData.timer,
           };
         });
       } catch {
@@ -139,32 +237,48 @@ const RefereeDashboard = () => {
     };
     fetchMatch();
     const fetchInterval = setInterval(fetchMatch, 3000);
-    return () => clearInterval(fetchInterval);
-  }, [role]);
+    return () => {
+      clearInterval(fetchInterval);
+      window.removeEventListener(EVENT_CHANGE_EVENT, onEventChange);
+      window.removeEventListener(MATCH_CHANGE_EVENT, onMatchChange);
+    };
+  }, [role, eventId, selectedMatchId]);
 
   // Visual Ticker based on timestamps (immune to browser throttling)
   useEffect(() => {
     let interval = null;
     if (timerActive && match?.timerLastStartedAt) {
       interval = setInterval(() => {
-        setMatch(prev => {
+        setMatch((prev) => {
           if (!prev) return prev;
-          
-          const timerAtStart = prev.timerAtStart !== undefined ? prev.timerAtStart : (prev.timer !== undefined ? prev.timer : 1200);
-          const elapsed = Math.floor((Date.now() - prev.timerLastStartedAt) / 1000);
+
+          const timerAtStart =
+            prev.timerAtStart !== undefined
+              ? prev.timerAtStart
+              : prev.timer !== undefined
+                ? prev.timer
+                : 1200;
+          const elapsed = Math.floor(
+            (Date.now() - prev.timerLastStartedAt) / 1000,
+          );
           const computedTimer = Math.max(0, timerAtStart - elapsed);
-          
+
           if (computedTimer === 0 && prev.timer !== 0) {
             // Auto stop at 0. Only chief referee officially patches it to close it out.
             if (role === "chief-referee") {
-              localStorage.setItem("kabaddi_timer_active", "false");
-              localStorage.setItem("kabaddi_timer", "0");
-              axios.patch(`${API_URL}/api/matches/${prev.id}`, { timer: 0, timerActive: false }).catch(() => {});
+              localStorage.setItem(`kabaddi_timer_active_${prev.id}`, "false");
+              localStorage.setItem(`kabaddi_timer_${prev.id}`, "0");
+              axios
+                .patch(`${API_URL}/api/matches/${prev.id}`, {
+                  timer: 0,
+                  timerActive: false,
+                })
+                .catch(() => {});
             }
             setTimerActive(false);
             return { ...prev, timer: 0, timerActive: false };
           }
-          
+
           return { ...prev, timer: computedTimer };
         });
       }, 500); // 500ms for smooth updates
@@ -175,15 +289,22 @@ const RefereeDashboard = () => {
   const updateScore = async (team, points, type) => {
     if (!match) return;
     const field = team === "A" ? "scoreA" : "scoreB";
+    const teamName = team === "A" ? match.teamAName : match.teamBName;
+    const teamId = team === "A" ? match.teamAId : match.teamBId;
     const newScore = (match[field] || 0) + points;
-    
+
     // Save to localStorage immediately to avoid lag/stutter
-    localStorage.setItem(`kabaddi_local_${field}`, newScore.toString());
-    
+    localStorage.setItem(
+      `kabaddi_local_${field}_${match.id}`,
+      newScore.toString(),
+    );
+
     const event = {
       time: match.timer !== undefined ? match.timer : 1200,
       type,
-      team,
+      team: teamName,
+      teamKey: team,
+      teamId,
       points,
       roleAction: role,
       timestamp: new Date(),
@@ -276,6 +397,35 @@ const RefereeDashboard = () => {
         </div>
       </header>
 
+      {liveMatches.length > 0 && (
+        <div
+          className="glass-panel"
+          style={{ padding: "1rem", marginBottom: "1rem" }}
+        >
+          <label
+            className="form-label"
+            style={{ marginBottom: "0.4rem", display: "block" }}
+          >
+            Choose Live Game
+          </label>
+          <select
+            className="form-control"
+            value={selectedMatchId}
+            onChange={(e) => {
+              const nextMatchId = e.target.value;
+              setSelectedMatchId(nextMatchId);
+              setActiveMatchId(nextMatchId, eventId);
+            }}
+          >
+            {liveMatches.map((liveGame) => (
+              <option key={liveGame.id} value={liveGame.id}>
+                {liveGame.teamAName} vs {liveGame.teamBName}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="official-layout-grid">
         <div
           className="glass-panel"
@@ -306,48 +456,69 @@ const RefereeDashboard = () => {
                   onClick={async () => {
                     const nextState = !timerActive;
                     setTimerActive(nextState);
-                    
+
                     if (match?.id) {
                       if (nextState) {
                         // Starting the clock
-                        const timerAtStart = match.timer !== undefined ? match.timer : 1200;
+                        const timerAtStart =
+                          match.timer !== undefined ? match.timer : 1200;
                         const now = Date.now();
-                        
+
                         // Ultra-low latency LocalStorage write
-                        localStorage.setItem("kabaddi_timer_active", "true");
-                        localStorage.setItem("kabaddi_timer_last_started_at", now.toString());
-                        localStorage.setItem("kabaddi_timer_at_start", timerAtStart.toString());
-                        
-                        setMatch(prev => ({
-                          ...prev, 
-                          timerActive: true, 
-                          timerLastStartedAt: now, 
-                          timerAtStart 
-                        }));
-                        
-                        axios.patch(`${API_URL}/api/matches/${match.id}`, { 
+                        localStorage.setItem(
+                          `kabaddi_timer_active_${match.id}`,
+                          "true",
+                        );
+                        localStorage.setItem(
+                          `kabaddi_timer_last_started_at_${match.id}`,
+                          now.toString(),
+                        );
+                        localStorage.setItem(
+                          `kabaddi_timer_at_start_${match.id}`,
+                          timerAtStart.toString(),
+                        );
+
+                        setMatch((prev) => ({
+                          ...prev,
                           timerActive: true,
                           timerLastStartedAt: now,
-                          timerAtStart
-                        }).catch(console.error);
+                          timerAtStart,
+                        }));
+
+                        axios
+                          .patch(`${API_URL}/api/matches/${match.id}`, {
+                            timerActive: true,
+                            timerLastStartedAt: now,
+                            timerAtStart,
+                          })
+                          .catch(console.error);
                       } else {
                         // Pausing the clock
-                        const currentTimer = match.timer !== undefined ? match.timer : 1200;
-                        
+                        const currentTimer =
+                          match.timer !== undefined ? match.timer : 1200;
+
                         // Ultra-low latency LocalStorage write
-                        localStorage.setItem("kabaddi_timer_active", "false");
-                        localStorage.setItem("kabaddi_timer", currentTimer.toString());
-                        
-                        setMatch(prev => ({
+                        localStorage.setItem(
+                          `kabaddi_timer_active_${match.id}`,
+                          "false",
+                        );
+                        localStorage.setItem(
+                          `kabaddi_timer_${match.id}`,
+                          currentTimer.toString(),
+                        );
+
+                        setMatch((prev) => ({
                           ...prev,
                           timerActive: false,
-                          timer: currentTimer
+                          timer: currentTimer,
                         }));
-                        
-                        axios.patch(`${API_URL}/api/matches/${match.id}`, {
-                          timerActive: false,
-                          timer: currentTimer
-                        }).catch(console.error);
+
+                        axios
+                          .patch(`${API_URL}/api/matches/${match.id}`, {
+                            timerActive: false,
+                            timer: currentTimer,
+                          })
+                          .catch(console.error);
                       }
                     }
                   }}
@@ -392,7 +563,7 @@ const RefereeDashboard = () => {
                       updateScore("A", 1, "Referee Override Point A")
                     }
                   >
-                    Give Point A
+                    Give Point {match.teamAName}
                   </button>
                   <button
                     className="btn btn-outline"
@@ -400,7 +571,7 @@ const RefereeDashboard = () => {
                       updateScore("B", 1, "Referee Override Point B")
                     }
                   >
-                    Give Point B
+                    Give Point {match.teamBName}
                   </button>
                 </div>
                 <div
@@ -673,7 +844,7 @@ const RefereeDashboard = () => {
                       borderRadius: "12px",
                       marginBottom: "0.5rem",
                       fontSize: "0.85rem",
-                      borderLeft: `3px solid ${event.team === "A" ? "var(--primary)" : event.team === "B" ? "var(--secondary)" : "var(--accent)"}`,
+                      borderLeft: `3px solid ${event.teamKey === "A" || event.team === match.teamAName ? "var(--primary)" : event.teamKey === "B" || event.team === match.teamBName ? "var(--secondary)" : "var(--accent)"}`,
                     }}
                   >
                     <div
@@ -686,18 +857,16 @@ const RefereeDashboard = () => {
                       <strong
                         style={{
                           color:
-                            event.team === "A"
+                            event.teamKey === "A" ||
+                            event.team === match.teamAName
                               ? "var(--primary)"
-                              : event.team === "B"
+                              : event.teamKey === "B" ||
+                                  event.team === match.teamBName
                                 ? "var(--secondary)"
                                 : "var(--accent)",
                         }}
                       >
-                        {event.team === "A"
-                          ? match.teamAName
-                          : event.team === "B"
-                            ? match.teamBName
-                            : "Match Official"}
+                        {event.team || "Match Official"}
                       </strong>
                       <span style={{ color: "var(--text-muted)" }}>
                         {event.time}s

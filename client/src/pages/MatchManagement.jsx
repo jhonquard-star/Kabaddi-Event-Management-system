@@ -1,8 +1,21 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { Shuffle, Calendar, Swords, AlertCircle, Play } from "lucide-react";
+import {
+  Shuffle,
+  Calendar,
+  Swords,
+  AlertCircle,
+  Play,
+  Trash2,
+  RefreshCw,
+  CheckCircle2,
+} from "lucide-react";
 import { motion } from "framer-motion";
-import { EVENT_CHANGE_EVENT, getActiveEventId } from "../utils/eventSelection";
+import {
+  EVENT_CHANGE_EVENT,
+  getActiveEventId,
+  setActiveMatchId,
+} from "../utils/eventSelection";
 import { API_URL } from "../utils/apiBase";
 
 const MatchManagement = () => {
@@ -11,8 +24,22 @@ const MatchManagement = () => {
   const [fixtures, setFixtures] = useState([]);
   const [pools, setPools] = useState({});
   const [numPools, setNumPools] = useState(4);
+  const [tournamentMode, setTournamentMode] = useState("league");
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState("");
+  const [selectedTeamForDeletion, setSelectedTeamForDeletion] = useState("");
   const visibleTeams = eventId ? teams : [];
+
+  const buildPoolsFromResponse = (poolPayload = {}) => {
+    const generatedPools = {};
+    Object.entries(poolPayload).forEach(([poolKey, poolTeams]) => {
+      generatedPools[poolKey] = poolTeams.map((team) => ({
+        name: team.name,
+        district: team.district || "Jharkhand",
+      }));
+    });
+    return generatedPools;
+  };
 
   const fetchMatchData = async () => {
     if (!eventId) return;
@@ -24,7 +51,7 @@ const MatchManagement = () => {
       setTeams(teamsRes.data);
 
       // 2. Fetch Existing Matches
-      const matchesRes = await axios.get(`${API_URL}/api/matches`, {
+      const matchesRes = await axios.get(`${API_URL}/api/matches/fixtures`, {
         params: { eventId },
       });
       setFixtures(matchesRes.data);
@@ -68,8 +95,11 @@ const MatchManagement = () => {
   }, [eventId]);
 
   const generateRandomPoolsAndFixtures = async () => {
-    if (visibleTeams.length < 4) {
-      alert("Minimum 4 teams required to create pools and matches.");
+    const minimumTeams = tournamentMode === "knockout" ? 2 : 4;
+    if (visibleTeams.length < minimumTeams) {
+      alert(
+        `Minimum ${minimumTeams} teams required for ${tournamentMode} format.`,
+      );
       return;
     }
 
@@ -80,22 +110,131 @@ const MatchManagement = () => {
         eventId,
         teams: visibleTeams,
         numPools,
+        mode: tournamentMode,
       });
       setFixtures(res.data.fixtures);
-      
-      // Use the dynamically returned pools from the backend!
-      const generatedPools = {};
-      Object.entries(res.data.pools).forEach(([poolKey, poolTeams]) => {
-        generatedPools[poolKey] = poolTeams.map(t => ({
-          name: t.name,
-          district: t.district || "Jharkhand"
-        }));
-      });
-      setPools(generatedPools);
+
+      setPools(buildPoolsFromResponse(res.data.pools));
     } catch (err) {
       alert("Error: " + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteAllFixtures = async () => {
+    if (!eventId) return;
+    if (!fixtures.length) {
+      alert("No fixtures available to delete.");
+      return;
+    }
+    if (!window.confirm("Delete all fixtures for this event permanently?")) {
+      return;
+    }
+
+    setActionLoading("delete-all");
+    try {
+      await axios.delete(`${API_URL}/api/matches/fixtures/all`, {
+        params: { eventId },
+      });
+      setFixtures([]);
+      setPools({});
+      alert("All fixtures deleted successfully.");
+    } catch (err) {
+      alert(
+        "Failed to delete all fixtures: " + (err.message || "Unknown error"),
+      );
+    } finally {
+      setActionLoading("");
+    }
+  };
+
+  const handleClearAllGames = async () => {
+    if (!eventId) return;
+    if (
+      !window.confirm(
+        "Delete all games (scheduled/live/completed) for this event and keep team/player data?",
+      )
+    ) {
+      return;
+    }
+
+    setActionLoading("clear-games");
+    try {
+      await axios.delete(`${API_URL}/api/matches/fixtures/all`, {
+        params: { eventId },
+      });
+      setFixtures([]);
+      setPools({});
+      alert("All games cleared. Teams and players are preserved.");
+    } catch (error) {
+      alert("Failed to clear games.");
+    } finally {
+      setActionLoading("");
+    }
+  };
+
+  const handleDeletePlayersBulk = async (teamWise = false) => {
+    if (!eventId) return;
+    if (teamWise && !selectedTeamForDeletion) {
+      alert("Select a team first.");
+      return;
+    }
+
+    const message = teamWise
+      ? "Delete all players of selected team for this event?"
+      : "Delete all players of this event?";
+    if (!window.confirm(message)) return;
+
+    setActionLoading(teamWise ? "delete-team-players" : "delete-all-players");
+    try {
+      const params = { eventId };
+      if (teamWise) params.teamId = selectedTeamForDeletion;
+      const res = await axios.delete(`${API_URL}/api/matches/players/bulk`, {
+        params,
+      });
+      alert(`Deleted ${res.data?.deletedCount || 0} player(s).`);
+    } catch (error) {
+      alert("Failed to delete players.");
+    } finally {
+      setActionLoading("");
+    }
+  };
+
+  const handleRearrangeFixtures = async () => {
+    if (!eventId) return;
+    const minimumTeams = tournamentMode === "knockout" ? 2 : 4;
+    if (visibleTeams.length < minimumTeams) {
+      alert(
+        `At least ${minimumTeams} teams are required for ${tournamentMode} format.`,
+      );
+      return;
+    }
+    if (
+      !window.confirm("Rearrange fixtures? Existing fixtures will be replaced.")
+    ) {
+      return;
+    }
+
+    setActionLoading("rearrange");
+    try {
+      const res = await axios.post(
+        `${API_URL}/api/matches/fixtures/rearrange`,
+        {
+          eventId,
+          numPools,
+          mode: tournamentMode,
+        },
+      );
+      setFixtures(res.data.fixtures || []);
+      setPools(buildPoolsFromResponse(res.data.pools));
+      alert("Fixtures rearranged successfully.");
+    } catch (err) {
+      alert(
+        "Failed to rearrange fixtures: " + (err.message || "Unknown error"),
+      );
+    } finally {
+      setActionLoading("");
     }
   };
 
@@ -118,15 +257,23 @@ const MatchManagement = () => {
             Advanced algorithmic randomization for fair play fixtures.
           </p>
         </div>
-        
+
         <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-            <label style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: "600" }}>
-              Number of Pools
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}
+          >
+            <label
+              style={{
+                fontSize: "0.8rem",
+                color: "var(--text-muted)",
+                fontWeight: "600",
+              }}
+            >
+              Tournament Format
             </label>
             <select
-              value={numPools}
-              onChange={(e) => setNumPools(parseInt(e.target.value))}
+              value={tournamentMode}
+              onChange={(e) => setTournamentMode(e.target.value)}
               style={{
                 padding: "0.5rem 1rem",
                 background: "rgba(0,0,0,0.5)",
@@ -134,7 +281,42 @@ const MatchManagement = () => {
                 borderRadius: "8px",
                 color: "#fff",
                 fontWeight: "600",
-                outline: "none"
+                outline: "none",
+              }}
+            >
+              <option value="league" style={{ background: "#111" }}>
+                League
+              </option>
+              <option value="knockout" style={{ background: "#111" }}>
+                Knockout
+              </option>
+            </select>
+          </div>
+
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}
+          >
+            <label
+              style={{
+                fontSize: "0.8rem",
+                color: "var(--text-muted)",
+                fontWeight: "600",
+              }}
+            >
+              Number of Pools
+            </label>
+            <select
+              value={numPools}
+              onChange={(e) => setNumPools(parseInt(e.target.value))}
+              disabled={tournamentMode === "knockout"}
+              style={{
+                padding: "0.5rem 1rem",
+                background: "rgba(0,0,0,0.5)",
+                border: "1px solid var(--glass-border)",
+                borderRadius: "8px",
+                color: "#fff",
+                fontWeight: "600",
+                outline: "none",
               }}
             >
               {[2, 3, 4, 5, 6, 7, 8].map((n) => (
@@ -149,7 +331,7 @@ const MatchManagement = () => {
             className="btn btn-primary"
             style={{ alignSelf: "flex-end" }}
             onClick={generateRandomPoolsAndFixtures}
-            disabled={loading || !eventId}
+            disabled={loading || actionLoading !== "" || !eventId}
           >
             {loading ? (
               "Processing Algorithms..."
@@ -159,8 +341,104 @@ const MatchManagement = () => {
               </>
             )}
           </button>
+
+          <button
+            className="btn btn-secondary"
+            style={{ alignSelf: "flex-end" }}
+            onClick={handleRearrangeFixtures}
+            disabled={loading || actionLoading !== "" || !eventId}
+          >
+            <RefreshCw size={18} />
+            {actionLoading === "rearrange"
+              ? "Rearranging..."
+              : "Rearrange Fixtures"}
+          </button>
+
+          <button
+            className="btn btn-danger"
+            style={{ alignSelf: "flex-end" }}
+            onClick={handleDeleteAllFixtures}
+            disabled={loading || actionLoading !== "" || !eventId}
+          >
+            <Trash2 size={18} />
+            {actionLoading === "delete-all"
+              ? "Deleting..."
+              : "Delete All Fixtures"}
+          </button>
         </div>
       </header>
+
+      <section
+        className="glass-panel"
+        style={{ padding: "1rem", marginBottom: "1.5rem" }}
+      >
+        <h3 style={{ marginBottom: "0.85rem" }}>Admin Maintenance Controls</h3>
+        <p style={{ color: "var(--text-muted)", marginBottom: "1rem" }}>
+          Use these actions to reset games or remove player data quickly.
+        </p>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "0.75rem",
+            marginBottom: "0.75rem",
+          }}
+        >
+          <button
+            className="btn btn-danger"
+            onClick={handleClearAllGames}
+            disabled={loading || actionLoading !== "" || !eventId}
+          >
+            {actionLoading === "clear-games"
+              ? "Clearing..."
+              : "Delete Everything (Keep Teams & Players)"}
+          </button>
+          <button
+            className="btn btn-danger"
+            onClick={() => handleDeletePlayersBulk(false)}
+            disabled={loading || actionLoading !== "" || !eventId}
+          >
+            {actionLoading === "delete-all-players"
+              ? "Deleting..."
+              : "Delete All Players (This Event)"}
+          </button>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "0.75rem",
+            alignItems: "flex-end",
+          }}
+        >
+          <div style={{ minWidth: "260px", flex: "1 1 260px" }}>
+            <label className="form-label" style={{ marginBottom: "0.35rem" }}>
+              Team-wise Player Delete
+            </label>
+            <select
+              className="form-control"
+              value={selectedTeamForDeletion}
+              onChange={(e) => setSelectedTeamForDeletion(e.target.value)}
+            >
+              <option value="">Select Team</option>
+              {teams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            className="btn btn-danger"
+            onClick={() => handleDeletePlayersBulk(true)}
+            disabled={loading || actionLoading !== "" || !eventId}
+          >
+            {actionLoading === "delete-team-players"
+              ? "Deleting..."
+              : "Delete Players of Selected Team"}
+          </button>
+        </div>
+      </section>
 
       {visibleTeams.length < 4 && (
         <div
@@ -184,13 +462,13 @@ const MatchManagement = () => {
       )}
 
       {Object.keys(pools).length > 0 && (
-        <div 
-          className="match-pools-grid" 
-          style={{ 
+        <div
+          className="match-pools-grid"
+          style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
             gap: "1.5rem",
-            marginBottom: "3rem" 
+            marginBottom: "3rem",
           }}
         >
           {Object.entries(pools).map(([poolKey, poolTeams], poolIndex) => (
@@ -200,7 +478,11 @@ const MatchManagement = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: poolIndex * 0.05 }}
               className="glass-panel"
-              style={{ padding: "1.5rem", position: "relative", overflow: "hidden" }}
+              style={{
+                padding: "1.5rem",
+                position: "relative",
+                overflow: "hidden",
+              }}
             >
               <div
                 style={{
@@ -209,7 +491,7 @@ const MatchManagement = () => {
                   left: 0,
                   width: "100%",
                   height: "3px",
-                  background: `linear-gradient(90deg, var(--primary), var(--secondary))`
+                  background: `linear-gradient(90deg, var(--primary), var(--secondary))`,
                 }}
               ></div>
               <h3
@@ -221,16 +503,26 @@ const MatchManagement = () => {
                   paddingBottom: "0.5rem",
                   fontWeight: "bold",
                   display: "flex",
-                  justifyContent: "space-between"
+                  justifyContent: "space-between",
                 }}
               >
                 <span>POOL {poolKey}</span>
-                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: "normal" }}>
+                <span
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "var(--text-muted)",
+                    fontWeight: "normal",
+                  }}
+                >
                   {poolTeams.length} Teams
                 </span>
               </h3>
               <div
-                style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.75rem",
+                }}
               >
                 {poolTeams.map((t, i) => (
                   <div
@@ -241,7 +533,7 @@ const MatchManagement = () => {
                       padding: "0.75rem 1rem",
                       background: "rgba(0,0,0,0.3)",
                       borderRadius: "8px",
-                      border: "1px solid rgba(255,255,255,0.02)"
+                      border: "1px solid rgba(255,255,255,0.02)",
                     }}
                   >
                     <span style={{ fontWeight: 600 }}>{t.name}</span>
@@ -306,9 +598,22 @@ const MatchManagement = () => {
                     marginBottom: "1.5rem",
                   }}
                 >
-                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.5rem",
+                      alignItems: "center",
+                    }}
+                  >
                     <span className="badge badge-primary">Match {i + 1}</span>
-                    {f.pool && <span className="badge badge-secondary">Pool {f.pool}</span>}
+                    {f.pool && (
+                      <span className="badge badge-secondary">
+                        Pool {f.pool}
+                      </span>
+                    )}
+                    {f.round && (
+                      <span className="badge badge-secondary">{f.round}</span>
+                    )}
                   </div>
                   <span
                     style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}
@@ -365,6 +670,7 @@ const MatchManagement = () => {
                         status: "live",
                         createdAt: new Date(),
                       });
+                      setActiveMatchId(f.id, eventId);
                       alert(`${f.teamAName} vs ${f.teamBName} is now LIVE!`);
                     } catch {
                       alert("Failed to set live");
@@ -372,6 +678,28 @@ const MatchManagement = () => {
                   }}
                 >
                   <Play size={14} /> Send to Live Queue
+                </button>
+
+                <button
+                  className="btn btn-primary"
+                  style={{
+                    width: "100%",
+                    marginTop: "0.75rem",
+                    fontSize: "0.8rem",
+                    padding: "0.5rem",
+                  }}
+                  onClick={async () => {
+                    try {
+                      await axios.patch(`${API_URL}/api/matches/${f.id}`, {
+                        status: "finished",
+                      });
+                      await fetchMatchData();
+                    } catch {
+                      alert("Failed to mark fixture as completed");
+                    }
+                  }}
+                >
+                  <CheckCircle2 size={14} /> Mark Completed
                 </button>
                 <button
                   className="btn btn-danger"
@@ -386,19 +714,7 @@ const MatchManagement = () => {
                       return;
                     try {
                       await axios.delete(`${API_URL}/api/matches/${f.id}`);
-                      setFixtures((current) =>
-                        current.filter((fixture) => fixture.id !== f.id),
-                      );
-                      setPools((current) => ({
-                        A: current.A.filter(
-                          (team) =>
-                            team.id !== f.teamAId && team.id !== f.teamBId,
-                        ),
-                        B: current.B.filter(
-                          (team) =>
-                            team.id !== f.teamAId && team.id !== f.teamBId,
-                        ),
-                      }));
+                      await fetchMatchData();
                     } catch {
                       alert("Failed to delete fixture");
                     }
