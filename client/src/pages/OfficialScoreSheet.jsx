@@ -27,6 +27,7 @@ import {
   setActiveMatchId,
 } from "../utils/eventSelection";
 import { API_URL } from "../utils/apiBase";
+import { formatFixtureLabel } from "../utils/matchScoring";
 
 const scoreNumbers = Array.from({ length: 60 }, (_, index) => index + 1);
 
@@ -362,7 +363,10 @@ const OfficialScoreSheet = () => {
           <div>
             <span className="eyebrow">Match Details</span>
             <strong>
-              {match.pool ? `Pool ${match.pool} · ` : ""}Match Live
+              {formatFixtureLabel(match)
+                ? `${formatFixtureLabel(match)} · `
+                : ""}
+              Match Live
             </strong>
           </div>
           <div>

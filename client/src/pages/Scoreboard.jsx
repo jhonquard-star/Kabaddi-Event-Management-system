@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { Trophy, Activity, Radio } from "lucide-react";
 import { API_URL } from "../utils/apiBase";
+import { formatMatchClock, readSharedMatchClock } from "../utils/matchClock";
+import { formatFixtureLabel } from "../utils/matchScoring";
 import {
   EVENT_CHANGE_EVENT,
   MATCH_CHANGE_EVENT,
@@ -26,38 +28,17 @@ const Scoreboard = () => {
   const readTimerState = (matchId) => {
     if (!matchId) return null;
 
-    const active =
-      localStorage.getItem(`kabaddi_timer_active_${matchId}`) === "true";
-    const lastStarted = localStorage.getItem(
-      `kabaddi_timer_last_started_at_${matchId}`,
-    );
-    const atStart = localStorage.getItem(`kabaddi_timer_at_start_${matchId}`);
-    const paused = localStorage.getItem(`kabaddi_timer_${matchId}`);
-
+    const sharedClock = readSharedMatchClock({ id: matchId });
     const scores = {};
     const scoreA = localStorage.getItem(`kabaddi_local_scoreA_${matchId}`);
     const scoreB = localStorage.getItem(`kabaddi_local_scoreB_${matchId}`);
     if (scoreA !== null) scores.scoreA = parseInt(scoreA);
     if (scoreB !== null) scores.scoreB = parseInt(scoreB);
 
-    if (active && lastStarted) {
-      const elapsed = Math.floor((Date.now() - parseInt(lastStarted)) / 1000);
-      const computed = Math.max(0, (parseInt(atStart) || 1200) - elapsed);
-      return {
-        timerActive: true,
-        timerLastStartedAt: parseInt(lastStarted),
-        timerAtStart: parseInt(atStart) || 1200,
-        timer: computed,
-        ...scores,
-      };
-    } else if (paused !== null) {
-      return {
-        timerActive: false,
-        timer: parseInt(paused),
-        ...scores,
-      };
-    }
-    return Object.keys(scores).length > 0 ? scores : null;
+    return {
+      ...sharedClock,
+      ...scores,
+    };
   };
 
   useEffect(() => {
@@ -362,26 +343,29 @@ const Scoreboard = () => {
             <div
               style={{ color: "white", fontSize: "1.5rem", fontWeight: 800 }}
             >
-              {match.pool ? `POOL ${match.pool}` : "MATCH LIVE"}
+              {formatFixtureLabel(match) || "MATCH LIVE"}
             </div>
           </div>
 
           <div
             style={{
               textAlign: "center",
-              background: "rgba(0,0,0,0.8)",
-              padding: isMobile ? "0.8rem 1rem" : "1rem 3rem",
+              background:
+                "linear-gradient(135deg, rgba(13, 27, 42, 0.96), rgba(31, 41, 55, 0.9))",
+              padding: isMobile ? "0.9rem 1rem" : "1.2rem 3.5rem",
               borderRadius: "20px",
-              border: "1px solid var(--glass-border)",
+              border: "1px solid rgba(242, 178, 3, 0.22)",
               alignSelf: isTablet ? "center" : "auto",
+              boxShadow: "0 18px 40px rgba(13, 27, 42, 0.2)",
             }}
           >
             <div
               style={{
-                color: "var(--text-muted)",
-                fontSize: "0.8rem",
+                color: "rgba(255,255,255,0.72)",
+                fontSize: "0.78rem",
                 letterSpacing: "0.2em",
                 marginBottom: "0.5rem",
+                textTransform: "uppercase",
               }}
             >
               TIME REMAINING
@@ -389,17 +373,25 @@ const Scoreboard = () => {
             <div
               className="timer-value"
               style={{
-                fontSize: isMobile ? "2.1rem" : isTablet ? "3rem" : "4rem",
-                textShadow: "0 0 30px var(--accent)",
+                fontSize: isMobile ? "2.4rem" : isTablet ? "3.4rem" : "4.5rem",
+                textShadow: "0 0 26px rgba(242, 178, 3, 0.3)",
+                color: "#fff",
+                lineHeight: 1,
+                fontFamily: "var(--font-mono)",
               }}
             >
-              {Math.floor((match.timer !== undefined ? match.timer : 1200) / 60)
-                .toString()
-                .padStart(2, "0")}
-              :
-              {((match.timer !== undefined ? match.timer : 1200) % 60)
-                .toString()
-                .padStart(2, "0")}
+              {formatMatchClock(match.timer !== undefined ? match.timer : 1200)}
+            </div>
+            <div
+              style={{
+                marginTop: "0.35rem",
+                color: "var(--brand-gold)",
+                fontSize: "0.82rem",
+                fontWeight: 700,
+                letterSpacing: "0.12em",
+              }}
+            >
+              LIVE MATCH CLOCK
             </div>
           </div>
 

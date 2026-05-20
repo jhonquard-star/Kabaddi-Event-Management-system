@@ -17,6 +17,7 @@ import RefereeDashboard from "./pages/RefereeDashboard";
 import Scoreboard from "./pages/Scoreboard";
 import OfficialsManagement from "./pages/OfficialsManagement";
 import OfficialScoreSheet from "./pages/OfficialScoreSheet";
+import ScoringOptions from "./pages/ScoringOptions";
 import EventManagement from "./pages/EventManagement";
 import CompletedGames from "./pages/CompletedGames";
 import LosingTeams from "./pages/LosingTeams";
@@ -69,6 +70,7 @@ function AppRouter() {
             <Route path="/officials" element={<OfficialsManagement />} />
             <Route path="/official/:role" element={<RefereeDashboard />} />
             <Route path="/scoresheet" element={<OfficialScoreSheet />} />
+            <Route path="/scoring-options" element={<ScoringOptions />} />
             <Route path="/scoreboard" element={<Scoreboard />} />
             <Route path="/completed-games" element={<CompletedGames />} />
             <Route path="/losing-teams" element={<LosingTeams />} />

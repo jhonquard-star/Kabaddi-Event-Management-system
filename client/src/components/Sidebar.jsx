@@ -67,6 +67,7 @@ const Sidebar = ({ isMobileOpen = false, onClose = () => {} }) => {
     { to: "/matches", icon: Trophy, label: "Pool Match Fixings" },
     { to: "/officials", icon: ClipboardList, label: "Officials Center" },
     { to: "/scoresheet", icon: FileSignature, label: "Official Score Sheet" },
+    { to: "/scoring-options", icon: ClipboardList, label: "Scoring Options" },
     { to: "/scoreboard", icon: MonitorPlay, label: "Live Scoreboard" },
     { to: "/completed-games", icon: ListChecks, label: "Completed Games" },
     { to: "/losing-teams", icon: AlertTriangle, label: "Losing Teams" },

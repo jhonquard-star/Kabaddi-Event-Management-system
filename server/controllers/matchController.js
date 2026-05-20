@@ -1008,9 +1008,91 @@ const getMatchOutcome = (match) => {
 const getNextRoundLabel = (currentRound) => {
   const label = normalizeString(currentRound || "League");
   if (normalizeRoundKey(label) === "league") return "Knockout Round 1";
-  const roundMatch = label.match(/round\s*(\d+)/i);
+  if (/pool\s*stage/i.test(label)) return "Knockout Round 1";
+  const roundMatch = label.match(/^(.*round\s*)(\d+)$/i);
   if (!roundMatch) return "Round 2";
-  return `Round ${Number(roundMatch[1]) + 1}`;
+  return `${roundMatch[1]}${Number(roundMatch[2]) + 1}`;
+};
+
+const buildPoolStandingsFromMatches = (matches = []) => {
+  const standings = new Map();
+
+  matches.forEach((match) => {
+    const poolKey = normalizeString(match.pool || "Pool").toUpperCase();
+    if (!standings.has(poolKey)) {
+      standings.set(poolKey, new Map());
+    }
+
+    const poolStandings = standings.get(poolKey);
+    const ensureTeam = (teamId, teamName) => {
+      if (!teamId) return null;
+      if (!poolStandings.has(teamId)) {
+        poolStandings.set(teamId, {
+          id: teamId,
+          name: teamName,
+          pool: match.pool || "",
+          played: 0,
+          wins: 0,
+          losses: 0,
+          draws: 0,
+          pointsFor: 0,
+          pointsAgainst: 0,
+          pointDiff: 0,
+        });
+      }
+      return poolStandings.get(teamId);
+    };
+
+    const teamA = ensureTeam(match.teamAId, match.teamAName);
+    const teamB = ensureTeam(match.teamBId, match.teamBName);
+    if (!teamA) return;
+
+    const scoreA = Number(match.scoreA || 0);
+    const scoreB = Number(match.scoreB || 0);
+    teamA.played += 1;
+    teamA.pointsFor += scoreA;
+    teamA.pointsAgainst += scoreB;
+    teamA.pointDiff += scoreA - scoreB;
+
+    if (teamB) {
+      teamB.played += 1;
+      teamB.pointsFor += scoreB;
+      teamB.pointsAgainst += scoreA;
+      teamB.pointDiff += scoreB - scoreA;
+    }
+
+    if (match.teamBName === "BYE" || !match.teamBId) {
+      teamA.wins += 1;
+      return;
+    }
+
+    if (scoreA === scoreB) {
+      teamA.draws += 1;
+      if (teamB) teamB.draws += 1;
+      return;
+    }
+
+    if (scoreA > scoreB) {
+      teamA.wins += 1;
+      if (teamB) teamB.losses += 1;
+    } else {
+      teamA.losses += 1;
+      if (teamB) teamB.wins += 1;
+    }
+  });
+
+  return Array.from(standings.entries()).flatMap(([poolKey, poolStandings]) => {
+    const ranked = Array.from(poolStandings.values()).sort((left, right) => {
+      if (right.wins !== left.wins) return right.wins - left.wins;
+      if (right.pointDiff !== left.pointDiff)
+        return right.pointDiff - left.pointDiff;
+      if (right.pointsFor !== left.pointsFor)
+        return right.pointsFor - left.pointsFor;
+      return left.name.localeCompare(right.name);
+    });
+
+    return ranked.length > 0 ? [{ ...ranked[0], pool: poolKey }] : [];
+  });
 };
 
 const buildRoundFixturesFromWinners = (winners, context) => {
@@ -1027,8 +1109,9 @@ const buildRoundFixturesFromWinners = (winners, context) => {
         teamBId: "",
         teamAName: teamA.name,
         teamBName: "BYE",
-        pool: teamA.pool || "Winners",
+        pool: "",
         round: context.round,
+        stage: "knockout",
         status: "finished",
         scoreA: 0,
         scoreB: 0,
@@ -1049,8 +1132,9 @@ const buildRoundFixturesFromWinners = (winners, context) => {
       teamBId: teamB.id,
       teamAName: teamA.name,
       teamBName: teamB.name,
-      pool: teamA.pool || teamB.pool || "Winners",
+      pool: "",
       round: context.round,
+      stage: "knockout",
       status: "scheduled",
       scoreA: 0,
       scoreB: 0,
@@ -1097,19 +1181,37 @@ const advanceTournamentIfReady = async (eventId, currentRound, mode) => {
     return;
   }
 
-  const winners = currentRoundMatches
-    .map((match) => {
-      const outcome = getMatchOutcome(match);
-      if (!outcome) return null;
-      return {
-        id: outcome.winnerTeamId,
-        name: outcome.winnerTeamName,
-        pool: match.pool || "Winners",
-      };
-    })
-    .filter(Boolean);
+  const winners = currentRoundMatches.map((match) => ({
+    ...match,
+    stage: normalizeString(match.stage || "pool").toLowerCase(),
+  }));
 
-  if (winners.length < 2) return;
+  let advancingTeams = [];
+
+  if (
+    tournamentMode === "knockout" &&
+    normalizeRoundKey(currentRound) === "pool stage"
+  ) {
+    advancingTeams = buildPoolStandingsFromMatches(winners).map((team) => ({
+      id: team.id,
+      name: team.name,
+      pool: team.pool || "",
+    }));
+  } else {
+    advancingTeams = winners
+      .map((match) => {
+        const outcome = getMatchOutcome(match);
+        if (!outcome) return null;
+        return {
+          id: outcome.winnerTeamId,
+          name: outcome.winnerTeamName,
+          pool: match.pool || "",
+        };
+      })
+      .filter(Boolean);
+  }
+
+  if (advancingTeams.length < 2) return;
 
   const nextRound = getNextRoundLabel(currentRound);
   if (
@@ -1121,7 +1223,7 @@ const advanceTournamentIfReady = async (eventId, currentRound, mode) => {
     return;
   }
 
-  const nextFixtures = buildRoundFixturesFromWinners(winners, {
+  const nextFixtures = buildRoundFixturesFromWinners(advancingTeams, {
     eventId,
     round: nextRound,
     mode: tournamentMode,

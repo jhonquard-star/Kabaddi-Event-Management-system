@@ -3,6 +3,7 @@ import axios from "axios";
 import { AlertTriangle, CalendarDays, Swords } from "lucide-react";
 import { EVENT_CHANGE_EVENT, getActiveEventId } from "../utils/eventSelection";
 import { API_URL } from "../utils/apiBase";
+import { formatFixtureLabel } from "../utils/matchScoring";
 
 const LosingTeams = () => {
   const [eventId, setEventId] = useState(getActiveEventId());
@@ -127,8 +128,10 @@ const LosingTeams = () => {
                   }}
                 >
                   <span className="badge badge-primary">Game {index + 1}</span>
-                  {match.pool ? (
-                    <span className="badge badge-secondary">{match.pool}</span>
+                  {formatFixtureLabel(match) ? (
+                    <span className="badge badge-secondary">
+                      {formatFixtureLabel(match)}
+                    </span>
                   ) : null}
                   {match.round ? (
                     <span className="badge badge-secondary">{match.round}</span>

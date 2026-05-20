@@ -8,6 +8,9 @@ import {
   Play,
   Trash2,
   RefreshCw,
+  Layers3,
+  Trophy,
+  ChevronRight,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -16,6 +19,7 @@ import {
   setActiveMatchId,
 } from "../utils/eventSelection";
 import { API_URL } from "../utils/apiBase";
+import { formatPoolLabel } from "../utils/matchScoring";
 
 const MatchManagement = () => {
   const [eventId, setEventId] = useState(getActiveEventId());
@@ -28,6 +32,16 @@ const MatchManagement = () => {
   const [actionLoading, setActionLoading] = useState("");
   const [selectedTeamForDeletion, setSelectedTeamForDeletion] = useState("");
   const visibleTeams = eventId ? teams : [];
+  const isKnockoutFixture = (fixture) => {
+    const stage = String(fixture?.stage || "").toLowerCase();
+    const round = String(fixture?.round || "").toLowerCase();
+    return stage === "knockout" || round.includes("knockout");
+  };
+
+  const poolStageFixtures = fixtures.filter(
+    (fixture) => !isKnockoutFixture(fixture),
+  );
+  const knockoutStageFixtures = fixtures.filter(isKnockoutFixture);
 
   const buildPoolsFromResponse = (poolPayload = {}) => {
     const generatedPools = {};
@@ -510,7 +524,7 @@ const MatchManagement = () => {
                   justifyContent: "space-between",
                 }}
               >
-                <span>POOL {poolKey}</span>
+                <span>{formatPoolLabel(poolKey)}</span>
                 <span
                   style={{
                     fontSize: "0.8rem",
@@ -550,6 +564,79 @@ const MatchManagement = () => {
         </div>
       )}
 
+      {tournamentMode === "knockout" && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.12 }}
+          className="glass-panel"
+          style={{
+            padding: "1.35rem",
+            marginBottom: "1.75rem",
+            border: "1px solid rgba(242, 178, 3, 0.16)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "1rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.9rem",
+                flexWrap: "wrap",
+              }}
+            >
+              <span
+                className="badge badge-secondary"
+                style={{
+                  display: "inline-flex",
+                  gap: "0.45rem",
+                  alignItems: "center",
+                }}
+              >
+                <Layers3 size={14} /> Pool Stage
+              </span>
+              <ChevronRight size={18} color="var(--text-muted)" />
+              <span
+                className="badge badge-accent"
+                style={{
+                  display: "inline-flex",
+                  gap: "0.45rem",
+                  alignItems: "center",
+                }}
+              >
+                <Trophy size={14} /> Knockout Bracket
+              </span>
+            </div>
+            <div style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>
+              Pool winners advance automatically once every pool fixture is
+              finished.
+            </div>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              gap: "0.6rem",
+              flexWrap: "wrap",
+              marginTop: "1rem",
+            }}
+          >
+            {Object.keys(pools).map((poolKey) => (
+              <span key={poolKey} className="badge badge-primary">
+                {formatPoolLabel(poolKey)}
+              </span>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       {fixtures.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -569,144 +656,308 @@ const MatchManagement = () => {
           >
             <Calendar color="var(--accent)" /> Official Fixtures Schedule
           </h2>
-          <div className="fixtures-grid">
-            {fixtures.map((f, i) => (
-              <div
-                key={i}
-                style={{
-                  padding: "1.5rem",
-                  background: "rgba(0,0,0,0.2)",
-                  border: "1px solid var(--glass-border)",
-                  borderRadius: "16px",
-                  position: "relative",
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "4px",
-                    height: "100%",
-                    background:
-                      i % 2 === 0 ? "var(--primary)" : "var(--secondary)",
-                  }}
-                ></div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "1.5rem",
-                  }}
-                >
+          {poolStageFixtures.length > 0 && (
+            <div style={{ marginBottom: "2rem" }}>
+              <h3 style={{ marginBottom: "1rem", color: "var(--primary)" }}>
+                Pool Stage Fixtures
+              </h3>
+              <div className="fixtures-grid">
+                {poolStageFixtures.map((f, i) => (
                   <div
+                    key={`${f.id}-pool`}
                     style={{
-                      display: "flex",
-                      gap: "0.5rem",
-                      alignItems: "center",
+                      padding: "1.5rem",
+                      background: "rgba(0,0,0,0.2)",
+                      border: "1px solid var(--glass-border)",
+                      borderRadius: "16px",
+                      position: "relative",
+                      overflow: "hidden",
                     }}
                   >
-                    <span className="badge badge-primary">Match {i + 1}</span>
-                    {f.pool && (
-                      <span className="badge badge-secondary">
-                        Pool {f.pool}
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: "4px",
+                        height: "100%",
+                        background:
+                          i % 2 === 0 ? "var(--primary)" : "var(--secondary)",
+                      }}
+                    ></div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "1.5rem",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "0.5rem",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <span className="badge badge-primary">
+                          Match {i + 1}
+                        </span>
+                        <span className="badge badge-secondary">
+                          Pool Stage
+                        </span>
+                        {f.pool && (
+                          <span className="badge badge-secondary">
+                            {formatPoolLabel(f.pool)}
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        style={{
+                          fontSize: "0.85rem",
+                          color: "var(--text-muted)",
+                        }}
+                      >
+                        Assigned to: Referee {(i % 6) + 1}
                       </span>
-                    )}
-                    {f.round && (
-                      <span className="badge badge-secondary">{f.round}</span>
-                    )}
-                  </div>
-                  <span
-                    style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}
-                  >
-                    Assigned to: Referee {(i % 6) + 1}
-                  </span>
-                </div>
+                    </div>
 
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    fontWeight: 800,
-                    fontSize: "1.2rem",
-                  }}
-                >
-                  <div
-                    className="fixture-team-name"
-                    style={{ flex: 1, textAlign: "center" }}
-                  >
-                    {f.teamAName}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        fontWeight: 800,
+                        fontSize: "1.2rem",
+                      }}
+                    >
+                      <div
+                        className="fixture-team-name"
+                        style={{ flex: 1, textAlign: "center" }}
+                      >
+                        {f.teamAName}
+                      </div>
+                      <div
+                        style={{
+                          margin: "0 1rem",
+                          color: "var(--accent)",
+                          background: "rgba(16, 185, 129, 0.1)",
+                          padding: "0.5rem",
+                          borderRadius: "50%",
+                        }}
+                      >
+                        <Swords size={20} />
+                      </div>
+                      <div
+                        className="fixture-team-name"
+                        style={{ flex: 1, textAlign: "center" }}
+                      >
+                        {f.teamBName}
+                      </div>
+                    </div>
+
+                    <button
+                      className="btn btn-secondary"
+                      style={{
+                        width: "100%",
+                        marginTop: "1.5rem",
+                        fontSize: "0.8rem",
+                        padding: "0.5rem",
+                      }}
+                      onClick={async () => {
+                        try {
+                          await axios.patch(`${API_URL}/api/matches/${f.id}`, {
+                            status: "live",
+                            createdAt: new Date(),
+                          });
+                          setActiveMatchId(f.id, eventId);
+                          alert(
+                            `${f.teamAName} vs ${f.teamBName} is now LIVE!`,
+                          );
+                        } catch {
+                          alert("Failed to set live");
+                        }
+                      }}
+                    >
+                      <Play size={14} /> Start Match
+                    </button>
+                    <button
+                      className="btn btn-danger"
+                      style={{
+                        width: "100%",
+                        marginTop: "0.75rem",
+                        fontSize: "0.8rem",
+                        padding: "0.5rem",
+                      }}
+                      onClick={async () => {
+                        if (!window.confirm("Delete this fixture permanently?"))
+                          return;
+                        try {
+                          await axios.delete(`${API_URL}/api/matches/${f.id}`);
+                          await fetchMatchData();
+                        } catch {
+                          alert("Failed to delete fixture");
+                        }
+                      }}
+                    >
+                      Delete Fixture
+                    </button>
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {knockoutStageFixtures.length > 0 && (
+            <div>
+              <h3 style={{ marginBottom: "1rem", color: "var(--accent)" }}>
+                Knockout Fixtures
+              </h3>
+              <div className="fixtures-grid">
+                {knockoutStageFixtures.map((f, i) => (
                   <div
+                    key={`${f.id}-ko`}
                     style={{
-                      margin: "0 1rem",
-                      color: "var(--accent)",
-                      background: "rgba(16, 185, 129, 0.1)",
-                      padding: "0.5rem",
-                      borderRadius: "50%",
+                      padding: "1.5rem",
+                      background: "rgba(0,0,0,0.2)",
+                      border: "1px solid var(--glass-border)",
+                      borderRadius: "16px",
+                      position: "relative",
+                      overflow: "hidden",
                     }}
                   >
-                    <Swords size={20} />
-                  </div>
-                  <div
-                    className="fixture-team-name"
-                    style={{ flex: 1, textAlign: "center" }}
-                  >
-                    {f.teamBName}
-                  </div>
-                </div>
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: "4px",
+                        height: "100%",
+                        background:
+                          i % 2 === 0 ? "var(--accent)" : "var(--primary)",
+                      }}
+                    ></div>
 
-                <button
-                  className="btn btn-secondary"
-                  style={{
-                    width: "100%",
-                    marginTop: "1.5rem",
-                    fontSize: "0.8rem",
-                    padding: "0.5rem",
-                  }}
-                  onClick={async () => {
-                    try {
-                      await axios.patch(`${API_URL}/api/matches/${f.id}`, {
-                        status: "live",
-                        createdAt: new Date(),
-                      });
-                      setActiveMatchId(f.id, eventId);
-                      alert(`${f.teamAName} vs ${f.teamBName} is now LIVE!`);
-                    } catch {
-                      alert("Failed to set live");
-                    }
-                  }}
-                >
-                  <Play size={14} /> Start Match
-                </button>
-                <button
-                  className="btn btn-danger"
-                  style={{
-                    width: "100%",
-                    marginTop: "0.75rem",
-                    fontSize: "0.8rem",
-                    padding: "0.5rem",
-                  }}
-                  onClick={async () => {
-                    if (!window.confirm("Delete this fixture permanently?"))
-                      return;
-                    try {
-                      await axios.delete(`${API_URL}/api/matches/${f.id}`);
-                      await fetchMatchData();
-                    } catch {
-                      alert("Failed to delete fixture");
-                    }
-                  }}
-                >
-                  Delete Fixture
-                </button>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "1.5rem",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "0.5rem",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <span className="badge badge-accent">
+                          {f.round || "Knockout"}
+                        </span>
+                        <span className="badge badge-secondary">
+                          Winner Advances
+                        </span>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: "0.85rem",
+                          color: "var(--text-muted)",
+                        }}
+                      >
+                        Assigned to: Referee {(i % 6) + 1}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        fontWeight: 800,
+                        fontSize: "1.2rem",
+                      }}
+                    >
+                      <div
+                        className="fixture-team-name"
+                        style={{ flex: 1, textAlign: "center" }}
+                      >
+                        {f.teamAName}
+                      </div>
+                      <div
+                        style={{
+                          margin: "0 1rem",
+                          color: "var(--accent)",
+                          background: "rgba(16, 185, 129, 0.1)",
+                          padding: "0.5rem",
+                          borderRadius: "50%",
+                        }}
+                      >
+                        <Trophy size={20} />
+                      </div>
+                      <div
+                        className="fixture-team-name"
+                        style={{ flex: 1, textAlign: "center" }}
+                      >
+                        {f.teamBName}
+                      </div>
+                    </div>
+
+                    <button
+                      className="btn btn-secondary"
+                      style={{
+                        width: "100%",
+                        marginTop: "1.5rem",
+                        fontSize: "0.8rem",
+                        padding: "0.5rem",
+                      }}
+                      onClick={async () => {
+                        try {
+                          await axios.patch(`${API_URL}/api/matches/${f.id}`, {
+                            status: "live",
+                            createdAt: new Date(),
+                          });
+                          setActiveMatchId(f.id, eventId);
+                          alert(
+                            `${f.teamAName} vs ${f.teamBName} is now LIVE!`,
+                          );
+                        } catch {
+                          alert("Failed to set live");
+                        }
+                      }}
+                    >
+                      <Play size={14} /> Start Match
+                    </button>
+                    <button
+                      className="btn btn-danger"
+                      style={{
+                        width: "100%",
+                        marginTop: "0.75rem",
+                        fontSize: "0.8rem",
+                        padding: "0.5rem",
+                      }}
+                      onClick={async () => {
+                        if (!window.confirm("Delete this fixture permanently?"))
+                          return;
+                        try {
+                          await axios.delete(`${API_URL}/api/matches/${f.id}`);
+                          await fetchMatchData();
+                        } catch {
+                          alert("Failed to delete fixture");
+                        }
+                      }}
+                    >
+                      Delete Fixture
+                    </button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </motion.div>
       )}
     </div>

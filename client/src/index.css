@@ -1404,6 +1404,21 @@ select optgroup {
     gap: 0.75rem;
   }
 
+  .referee-main-grid,
+  .official-layout-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .referee-main-grid > *:nth-child(1),
+  .official-layout-grid > *:nth-child(1) {
+    min-width: 0;
+  }
+
+  .referee-main-grid > *:nth-child(2),
+  .official-layout-grid > *:nth-child(2) {
+    min-width: 0;
+  }
+
   .legend {
     justify-content: flex-start;
   }
@@ -1505,6 +1520,24 @@ select optgroup {
     width: 100%;
   }
 
+  .page-header {
+    gap: 1rem;
+  }
+
+  .page-header > div,
+  .page-header .btn {
+    width: 100%;
+  }
+
+  .official-page-header {
+    gap: 1rem;
+  }
+
+  .official-page-header > div,
+  .official-page-header .badge {
+    width: 100%;
+  }
+
   .branding-bar-inner {
     flex-wrap: wrap;
     gap: 0.55rem;
@@ -1536,6 +1569,22 @@ select optgroup {
 
   .fixtures-grid {
     grid-template-columns: 1fr;
+  }
+
+  .official-score-strip {
+    padding: 1rem !important;
+  }
+
+  .official-score-strip h2 {
+    font-size: 1.2rem !important;
+  }
+
+  .official-score-strip .timer-value {
+    font-size: clamp(2.4rem, 12vw, 3.4rem) !important;
+  }
+
+  .official-layout-grid {
+    gap: 1rem !important;
   }
 
   .glass-panel {

@@ -3,6 +3,7 @@ import axios from "axios";
 import { CheckCircle2, Trophy, CalendarDays, Swords } from "lucide-react";
 import { EVENT_CHANGE_EVENT, getActiveEventId } from "../utils/eventSelection";
 import { API_URL } from "../utils/apiBase";
+import { formatFixtureLabel } from "../utils/matchScoring";
 
 const CompletedGames = () => {
   const [eventId, setEventId] = useState(getActiveEventId());
@@ -66,6 +67,8 @@ const CompletedGames = () => {
 
     return `${match.teamBName} won by ${scoreB - scoreA}`;
   };
+
+  const getEvaluation = (match) => match.refereeEvaluation || null;
 
   const deleteCompletedGame = async (matchId) => {
     if (!window.confirm("Delete this completed game permanently?")) return;
@@ -172,8 +175,10 @@ const CompletedGames = () => {
                   <span className="badge badge-secondary">
                     {(match.tournamentMode || "league").toUpperCase()}
                   </span>
-                  {match.pool ? (
-                    <span className="badge badge-secondary">{match.pool}</span>
+                  {formatFixtureLabel(match) ? (
+                    <span className="badge badge-secondary">
+                      {formatFixtureLabel(match)}
+                    </span>
                   ) : null}
                   {match.round ? (
                     <span className="badge badge-secondary">{match.round}</span>
@@ -237,6 +242,60 @@ const CompletedGames = () => {
               >
                 <Trophy size={16} /> {getResultLabel(match)}
               </div>
+
+              {getEvaluation(match) && (
+                <div
+                  style={{
+                    borderRadius: "12px",
+                    padding: "0.9rem",
+                    background: "rgba(59, 130, 246, 0.08)",
+                    border: "1px solid rgba(59, 130, 246, 0.25)",
+                    display: "grid",
+                    gap: "0.75rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: "0.75rem",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <strong>Final Evaluation</strong>
+                    <span style={{ color: "var(--text-muted)" }}>
+                      Winner: {getEvaluation(match).winner} · Margin:{" "}
+                      {getEvaluation(match).margin}
+                    </span>
+                  </div>
+                  <div className="fixtures-grid" style={{ gap: "0.75rem" }}>
+                    {getEvaluation(match).roleSummaries?.map((summary) => (
+                      <div
+                        key={summary.role}
+                        style={{
+                          padding: "0.75rem",
+                          borderRadius: "10px",
+                          background: "rgba(255,255,255,0.75)",
+                          border: "1px solid var(--glass-border)",
+                        }}
+                      >
+                        <strong>{summary.roleLabel}</strong>
+                        <div
+                          style={{
+                            color: "var(--text-muted)",
+                            fontSize: "0.85rem",
+                            marginTop: "0.25rem",
+                          }}
+                        >
+                          Score A {summary.scoreA} · Score B {summary.scoreB} ·
+                          Events {summary.events} · Half records{" "}
+                          {summary.halfSnapshots}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div
                 style={{ display: "flex", gap: "0.65rem", flexWrap: "wrap" }}
